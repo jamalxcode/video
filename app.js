@@ -561,7 +561,7 @@ function autoTestVisible() {
 /* =========================================================================
    Channel list (virtualized — handles playlists with tens of thousands of entries)
    ========================================================================= */
-const ROW = 56;
+const ROW = 74; // room for a two-line channel name plus the status line
 // Fallback for when the list has no layout yet (hidden tab, first paint).
 const listHeight = () => $('#list').clientHeight || window.innerHeight || 800;
 let renderPending = false;
@@ -597,12 +597,14 @@ function renderList() {
     const fav = S.favs.has(ch.key);
     const active = S.current && S.current.key === ch.key;
     const more = ch.sources.length > 1 ? ` · ${ch.sources.length} sources` : '';
-    html += `<div class="ch${active ? ' active' : ''}" data-i="${i}" style="top:${i * ROW}px" title="${esc(st.tip)}">
+    html += `<div class="ch${active ? ' active' : ''}" data-i="${i}" style="top:${i * ROW}px" title="${esc(ch.name + ' — ' + st.tip)}">
       <span class="ch-num">${chNum(ch)}</span>
       <div class="ch-body">
         <div class="logo">${ch.logo ? `<img src="${esc(ch.logo)}" loading="lazy" referrerpolicy="no-referrer" alt="" onerror="this.remove()">` : '▶'}</div>
-        <div class="info"><div class="name">${esc(ch.name)}</div><div class="grp">${esc(groupLabel(ch) + more)}</div></div>
-        ${badgeHtml(st)}
+        <div class="info">
+          <div class="name">${esc(ch.name)}</div>
+          <div class="meta">${badgeHtml(st)}<span class="grp">${esc(groupLabel(ch) + more)}</span></div>
+        </div>
         <button class="star${fav ? ' on' : ''}" data-star="${i}" title="${fav ? 'Remove from' : 'Add to'} favorites" aria-label="${fav ? 'Remove from' : 'Add to'} favorites">${fav ? '★' : '☆'}</button>
       </div>
     </div>`;
