@@ -827,7 +827,7 @@ const VFD = (() => {
   const box = $('#vfd');
   const narrow = matchMedia('(max-width: 820px)'); // same breakpoint as the phone layout
   const STATE = {
-    standby: ['STANDBY', ''], tuning: ['TUNING…', 'lvl-warn'], live: ['● LIVE', 'lvl-good'],
+    standby: ['STANDBY', ''], tuning: ['TUNING…', 'lvl-warn'], live: ['● LIVE', 'lvl-good'], sleep: ['☾ SLEEPING', 'lvl-warn'],
     buffering: ['BUFFERING', 'lvl-warn'], nosignal: ['NO SIGNAL', 'lvl-bad'],
   };
   const two = n => String(n).padStart(2, '0');
@@ -885,11 +885,90 @@ const VFD = (() => {
       const st = channelStatus(next);
       set('vfdNext', `${chNum(next)} ${next.name.toUpperCase()} ${BARS[st.cls]}`, 'lvl-' + st.cls);
     } else set('vfdNext', '—');
-    set('vfdClock', new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toUpperCase());
+    const clock = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toUpperCase();
+    set('vfdClock', Sleep.active() ? `${clock} · ☾ ${Sleep.left()}` : clock, Sleep.active() ? 'lvl-warn' : '');
   }
   setInterval(() => { if (!document.hidden) update(); }, 1000);
   $('#vfdNextBtn').addEventListener('click', () => step(1));
   return { update };
+})();
+
+/* Sleep timer: each press adds a 30-minute step up to 3 hours, then turns it off.
+   At the end the sound fades out over 10 seconds and the channel stops. */
+const Sleep = (() => {
+  const STEPS = [0, 30, 60, 90, 120, 150, 180]; // minutes
+  const FADE_MS = 10000;
+  const btn = $('#sleepBtn'), lbl = $('#sleepLbl');
+  let step = 0, endsAt = 0, timer = 0, fadeFrom = null;
+  const two = n => String(n).padStart(2, '0');
+  function fmt(ms) {
+    const s = Math.max(0, Math.ceil(ms / 1000)), h = Math.floor(s / 3600);
+    return h ? `${h}:${two(Math.floor(s / 60) % 60)}:${two(s % 60)}` : `${Math.floor(s / 60)}:${two(s % 60)}`;
+  }
+  const words = min => (min < 60 ? `${min} min` : `${Math.floor(min / 60)} h${min % 60 ? ' 30 min' : ''}`);
+  function render() {
+    const on = endsAt > 0;
+    lbl.textContent = on ? fmt(endsAt - Date.now()) : 'SLEEP';
+    btn.classList.toggle('on', on);
+    btn.setAttribute('aria-label', on ? `Sleep timer: ${fmt(endsAt - Date.now())} left` : 'Sleep timer: off');
+  }
+  function restoreVolume() {
+    if (fadeFrom !== null) { video.volume = fadeFrom; fadeFrom = null; }
+  }
+  function stop() {
+    clearInterval(timer);
+    restoreVolume();
+    step = 0; endsAt = 0;
+    render();
+    VFD.update();
+  }
+  function finish() {
+    const vol = fadeFrom;
+    clearInterval(timer);
+    step = 0; endsAt = 0;
+    if (session?.started) {
+      video.pause();
+      if (hls) hls.stopLoad(); // stop downloading while asleep
+      if (mpeg) { try { mpeg.unload(); } catch { /* already stopped */ } }
+    }
+    if (vol !== null) video.volume = vol; // back to your normal level for next time
+    fadeFrom = null;
+    render();
+    TV.setState('sleep');
+    if (S.current) showOverlay('<b>☾ SLEEP TIMER</b><div class="muted">Time’s up, so the sound is off.</div>', [['resume', 'Resume watching']]);
+  }
+  function tick() {
+    const left = endsAt - Date.now();
+    if (left <= 0) return finish();
+    if (left <= FADE_MS && session?.started && !video.paused) {
+      if (fadeFrom === null) fadeFrom = video.volume;
+      video.volume = Math.max(0, fadeFrom * (left / FADE_MS));
+    }
+    render();
+  }
+  function cycle() {
+    step = (step + 1) % STEPS.length;
+    const min = STEPS[step];
+    if (!min) { stop(); toast('Sleep timer off'); TV.osdShow('☾ SLEEP<small>OFF</small>', 1500); return; }
+    restoreVolume();
+    endsAt = Date.now() + min * 60000;
+    clearInterval(timer);
+    timer = setInterval(tick, 250);
+    render();
+    VFD.update();
+    toast(`Sleep timer: sound off in ${words(min)}`);
+    TV.osdShow(`☾ SLEEP<small>${fmt(min * 60000)}</small>`, 2000);
+  }
+  btn.addEventListener('click', cycle);
+  return {
+    cycle,
+    stop,
+    active: () => endsAt > 0,
+    left: () => fmt(endsAt - Date.now()),
+    fading: () => fadeFrom !== null,
+    // Changing channel during the final fade means you're awake: cancel the timer.
+    wake() { if (fadeFrom !== null) { stop(); toast('Sleep timer cancelled'); } },
+  };
 })();
 
 function teardown() {
@@ -944,6 +1023,7 @@ const currentSourceUrl = () =>
 const hasBackup = () => session && session.idx < session.order.length - 1;
 
 function playChannel(ch, startUrl) {
+  Sleep.wake();
   leaveSession();
   teardown();
   S.current = ch;
@@ -1563,6 +1643,7 @@ function wire() {
     else if (a === 'wait') showOverlay('<div class="spinner"></div>Still waiting…', [['next', 'Next channel']]);
     else if (a === 'broken') { setRating('broken'); step(1, true); }
     else if (a === 'rate-buffers') { setRating('buffers'); hideOverlay(); }
+    else if (a === 'resume' && S.current) playChannel(S.current); // back to the live picture
   });
 
   $('#countryFilter').addEventListener('change', e => { S.ui.country = e.target.value; saveUi(); applyFilters(); });
@@ -1587,13 +1668,15 @@ function wire() {
     else if (k === 'Escape') { S.cursor = S.current ? S.filtered.findIndex(c => c.key === S.current.key) : -1; scrollToCurrent(); scheduleRender(); }
     else if (k === 'f' || k === 'F') { const ch = S.filtered[S.cursor] || S.current; if (ch) toggleFav(ch); }
     else if (k === ' ' && !onButton && session?.started) { handled(); video.paused ? video.play().catch(() => {}) : video.pause(); }
+    else if (k === 's' || k === 'S') Sleep.cycle();
   });
 
   // Remember volume and mute between channels and visits.
   let volTimer;
   video.addEventListener('volumechange', () => {
     clearTimeout(volTimer);
-    volTimer = setTimeout(() => { S.ui.volume = video.volume; S.ui.muted = video.muted; saveUi(); }, 300);
+    if (Sleep.fading()) return; // the sleep fade isn't your chosen volume
+    volTimer = setTimeout(() => { if (!Sleep.fading()) { S.ui.volume = video.volume; S.ui.muted = video.muted; saveUi(); } }, 300);
   });
 }
 // Recently watched: newest first, saved copies so they work from any playlist.

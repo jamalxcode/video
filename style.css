@@ -388,3 +388,6 @@ dialog textarea { min-height: 80px; font: 12px/1.4 ui-monospace, Consolas, monos
 /* Header icon: the old-style TV (same as the favicon) */
 .brand-icon { width: 30px; height: 30px; flex: none; }
 @media (max-width: 820px) { .brand-icon { width: 24px; height: 24px; } }
+
+/* Sleep timer knob: countdown fits on the knob face */
+#sleepBtn small { font-size: 14px; letter-spacing: .02em; }

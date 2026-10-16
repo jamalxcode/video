@@ -27,7 +27,8 @@ A browser-based player for M3U / M3U8 IPTV playlists, styled like a 70s wood-pan
 - **Recently watched**: the last 40 channels you actually watched, from any playlist.
 - **Remembers volume** and mute between channels and visits.
 - **Auto-skip** (in Settings): jumps to the next working channel when one fails or times out.
-- **Keyboard / TV remote**: ↑↓ move through the guide, Enter plays, ←→ previous/next channel, PgUp/PgDn jump a page, type a channel number to jump, `F` favorite, Space pause, Esc back to what's playing.
+- **Sleep timer**: the ☾ SLEEP knob counts down from 30 minutes to 3 hours (each press adds 30 minutes, then off). At the end the sound fades out over 10 seconds and the channel stops, with a button to resume.
+- **Keyboard / TV remote**: ↑↓ move through the guide, Enter plays, ←→ previous/next channel, PgUp/PgDn jump a page, type a channel number to jump, `F` favorite, `S` sleep timer, Space pause, Esc back to what's playing.
 - **Retro look**: wood-cabinet TV with a channel dial on desktop, a full-width player with a control strip on phones. Scanlines and static between channels can be switched off in Settings.
 
 ## Your data stays in your browser
