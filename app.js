@@ -626,7 +626,7 @@ function renderList() {
     const active = S.current && S.current.key === ch.key;
     const cc = countryOf(ch);
     const more = (ch.sources.length > 1 ? ` · ${ch.sources.length} sources` : '') + (cc ? ` · ${countryFlag(cc)}` : '');
-    html += `<div class="ch${active ? ' active' : ''}${i === S.cursor ? ' cursor' : ''}" id="ch-${i}" role="option" aria-selected="${i === S.cursor}" data-i="${i}" style="top:${i * ROW}px" title="${esc(ch.name + ' — ' + st.tip)}">
+    html += `<div class="ch${active ? ' active' : ''}${i === S.cursor ? ' cursor' : ''}${isBadCls(st.cls) ? ' dead' : ''}" id="ch-${i}" role="option" aria-selected="${i === S.cursor}" data-i="${i}" style="top:${i * ROW}px" title="${esc(ch.name + ' — ' + st.tip)}">
       <span class="ch-num">${chNum(ch)}</span>
       <div class="ch-body">
         <div class="logo">${ch.logo ? `<img src="${esc(ch.logo)}" loading="lazy" referrerpolicy="no-referrer" alt="" onerror="this.remove()">` : '▶'}</div>

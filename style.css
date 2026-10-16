@@ -328,3 +328,13 @@ dialog textarea { min-height: 80px; font: 12px/1.4 ui-monospace, Consolas, monos
 .tag { font: 14px/1 var(--pixel); color: var(--hi); border: 1px solid currentColor; border-radius: 3px; padding: 1px 4px; letter-spacing: .04em; flex: none; }
 .ch.active .tag { color: var(--guide); }
 #nowMeta .tag { font-size: 16px; vertical-align: 2px; }
+
+/* Broken / offline / blocked channels: a dead, greyed-out row. Working and untested stay guide blue. */
+.ch.dead .ch-num { background: #4a4a56; color: #b4b4bf; }
+.ch.dead .ch-body { background: #3a3a45; color: #a9a9b4; }
+.ch.dead:nth-child(even) .ch-body { background: #34343e; }
+.ch.dead:hover .ch-body { background: #44444f; }
+.ch.dead .grp { color: #8d8d99; }
+.ch.dead .logo img { filter: grayscale(1); opacity: .55; }
+.ch.dead .star:not(.on) { color: #6c6c78; }
+.ch.dead.cursor:not(.active) .ch-body { background: #4a4a56; }
