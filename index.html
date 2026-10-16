@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=21">
+<link rel="stylesheet" href="style.css?v=22">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://iptv-org.github.io" crossorigin>
 </head>
@@ -94,10 +94,16 @@
     <div class="filters">
       <div class="frow">
         <input id="search" type="search" placeholder="Search channels…" autocomplete="off" aria-label="Search channels">
+        <select id="sortSel" class="sort" title="Sort order" aria-label="Sort">
+          <option value="">Sort: playlist</option>
+          <option value="best">Sort: best first</option>
+          <option value="name">Sort: A–Z</option>
+        </select>
         <button id="testBtn" title="Check the channels in the current list">Test channels</button>
       </div>
       <div class="frow frow3">
         <select id="countryFilter" title="Country" aria-label="Country"></select>
+        <select id="langFilter" title="Language" aria-label="Language"></select>
         <select id="groupFilter" title="Group" aria-label="Group"></select>
         <select id="statusFilter" title="Show" aria-label="Show">
           <option value="all">Show: all</option>
@@ -107,11 +113,6 @@
           <option value="hideBad">Hide broken</option>
           <option value="noGeo">Hide geo-blocked</option>
           <option value="untested">Untested</option>
-        </select>
-        <select id="sortSel" title="Sort order" aria-label="Sort">
-          <option value="">Sort: playlist</option>
-          <option value="best">Sort: best first</option>
-          <option value="name">Sort: A–Z</option>
         </select>
       </div>
     </div>
@@ -182,6 +183,6 @@
 </dialog>
 
 <div id="toast" class="toast hidden"></div>
-<script src="app.js?v=21"></script>
+<script src="app.js?v=22"></script>
 </body>
 </html>

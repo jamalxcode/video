@@ -391,3 +391,16 @@ dialog textarea { min-height: 80px; font: 12px/1.4 ui-monospace, Consolas, monos
 
 /* Sleep timer knob: countdown fits on the knob face */
 #sleepBtn small { font-size: 14px; letter-spacing: .02em; }
+
+/* Country flags: Windows has no flag emojis, so load a flags-only font (used only for flag characters) */
+@font-face {
+  font-family: 'Twemoji Country Flags';
+  src: url('https://cdn.jsdelivr.net/npm/country-flag-emoji-polyfill@0.1.8/dist/TwemojiCountryFlags.woff2') format('woff2');
+  unicode-range: U+1F1E6-1F1FF, U+1F3F4, U+E0062-E007F;
+  font-display: swap;
+}
+body, button, select, input, textarea { font-family: 'Twemoji Country Flags', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+:root { --pixel: 'Twemoji Country Flags', 'VT323', ui-monospace, Consolas, monospace; }
+.flag { margin-right: .35em; font-size: .9em; vertical-align: 1px; }
+/* sort sits beside the search box now */
+#sortSel.sort { flex: 0 1 auto; width: auto; min-width: 0; max-width: 34%; }

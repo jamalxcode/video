@@ -147,7 +147,7 @@ const S = {
   hosts: new Map(),     // server host -> { ok, blocked, dead } from recent tests
   favs: new Map(),      // channel key -> saved channel
   settings: { ...DEFAULT_SETTINGS },
-  ui: { currentId: null, search: '', group: '', country: '', status: 'all', sort: '', lastKey: '', volume: 1, muted: false },
+  ui: { currentId: null, search: '', group: '', country: '', lang: '', status: 'all', sort: '', lastKey: '', volume: 1, muted: false },
   recent: [],           // recently watched channels, newest first (saved copies, so they work across playlists)
   cursor: -1,           // highlighted guide row for arrow-key / remote navigation
   lit: new Map(),       // channel key -> when it was just confirmed good (for the light-up effect)
@@ -187,6 +187,8 @@ function parseM3U(text) {
         id: attrs['tvg-id'] || '',
         ua: attrs['http-user-agent'] || '',
         ref: attrs['http-referrer'] || attrs['http-referer'] || '',
+        lang: attrs['tvg-language'] || '',   // e.g. "English;Arabic" or "eng" (many non-iptv-org playlists)
+        cc: attrs['tvg-country'] || '',      // e.g. "US" or "US;CA"
       };
     } else if (/^#EXTGRP:/i.test(line)) {
       if (cur && !cur.group) cur.group = line.slice(8).trim();
@@ -209,6 +211,8 @@ function parseM3U(text) {
         // iptv-org marks these in the name: "Channel (720p) [Geo-blocked] [Not 24/7]"
         geo: /\[geo[- ]?blocked\]/i.test(cur?.name || ''),
         part: /\[not 24\/7\]/i.test(cur?.name || ''),
+        langs: splitList(cur?.lang).map(l => l.toLowerCase()),
+        cc: normCountry(splitList(cur?.cc)[0]),
       });
       cur = null;
     }
@@ -216,6 +220,9 @@ function parseM3U(text) {
   return out;
 }
 
+const splitList = v => (v || '').split(/[;,|]/).map(s => s.trim()).filter(Boolean);
+// Two-letter country, matching iptv-org's codes (they use "uk" for the United Kingdom).
+const normCountry = v => { const c = (v || '').trim().toLowerCase(); return /^[a-z]{2}$/.test(c) ? (c === 'gb' ? 'uk' : c) : ''; };
 // iptv-org ids end in a country code: "CNN.us@HD" -> "us". Older saved channels: read it from the key.
 const countryFromId = id => ((id || '').match(/\.([a-z]{2})(?:@|$)/i) || [])[1]?.toLowerCase() || '';
 const countryOf = ch => ch.country || countryFromId((ch.key || '').replace(/^id:/, ''));
@@ -235,6 +242,84 @@ function tagsHtml(ch) {
   return t;
 }
 
+/* Languages: from the playlist's own tvg-language, else iptv-org's feed data matched by channel id. */
+const LANG_API = IPTV_ORG.replace('/iptv/', '/api/');
+const LANG_MAX_AGE = 3 * 86400e3; // refreshed every few days; languages rarely change
+const L = { map: new Map(), names: new Map(), byName: new Map(), at: 0, version: 0, loading: false };
+const langDisplay = (() => { try { return new Intl.DisplayNames(['en'], { type: 'language' }); } catch { return null; } })();
+// "eng", "en" and "English" all become "eng" once iptv-org's language list is known.
+function normLang(t) {
+  t = t.toLowerCase().trim();
+  if (L.names.has(t)) return t;
+  if (L.byName.has(t)) return L.byName.get(t);
+  if (t.length === 2 && langDisplay) {
+    try { const n = langDisplay.of(t).toLowerCase(); if (L.byName.has(n)) return L.byName.get(n); } catch { /* not a language code */ }
+  }
+  return t;
+}
+function langName(code) {
+  if (L.names.has(code)) return L.names.get(code);
+  if (code.length <= 3 && langDisplay) { try { const n = langDisplay.of(code); if (n && n !== code) return n; } catch { /* unknown code */ } }
+  return code.replace(/^./, c => c.toUpperCase());
+}
+const langMemo = new WeakMap();
+function langsOf(ch) {
+  const m = langMemo.get(ch);
+  if (m && m.v === L.version) return m.l;
+  let l = [];
+  for (const s of ch.sources || []) for (const x of s.langs || []) l.push(normLang(x));
+  if (!l.length && ch.key?.startsWith('id:')) l = L.map.get(ch.key.slice(3)) || [];
+  l = [...new Set(l)];
+  langMemo.set(ch, { v: L.version, l });
+  return l;
+}
+// Short label for a guide row, e.g. "ARA·ENG" (full names in the now-playing panel).
+const langTag = ch => { const l = langsOf(ch); return l.length ? l.slice(0, 2).join('·').toUpperCase() + (l.length > 2 ? '+' : '') : ''; };
+function applyLangData(d) {
+  if (!d || d.at === L.at) return;
+  L.at = d.at;
+  L.map = new Map(d.map.map(([k, v]) => [k, v.split(',')]));
+  L.names = new Map(d.names);
+  L.byName = new Map(d.names.map(([c, n]) => [n.toLowerCase(), c]));
+  L.version++;
+  rebuildGroups();
+  applyFilters(true);
+  renderNow();
+}
+// Loads iptv-org's languages for every channel feed, keeps a compact copy in this browser.
+async function loadLanguages() {
+  if (L.loading) return;
+  const cached = await DB.get('kv', 'langdata');
+  applyLangData(cached);
+  if (!S.channels.some(c => c.key.startsWith('id:'))) return; // only playlists with iptv-org ids need it
+  if (cached && Date.now() - cached.at < LANG_MAX_AGE) return;
+  L.loading = true;
+  try {
+    const [feeds, langs] = await Promise.all([
+      fetch(LANG_API + 'feeds.json').then(r => r.json()),
+      fetch(LANG_API + 'languages.json').then(r => r.json()),
+    ]);
+    const main = new Map();
+    const out = [];
+    for (const f of feeds) {
+      if (!f.channel || !f.languages?.length) continue;
+      const id = f.channel.toLowerCase();
+      const v = f.languages.join(',');
+      out.push([id + '@' + (f.id || '').toLowerCase(), v]); // regional feeds, e.g. abc.us@kaal
+      if (f.is_main || !main.has(id)) main.set(id, v);      // the channel itself = its main feed
+    }
+    for (const [id, v] of main) out.push([id, v]);
+    const data = { at: Date.now(), map: out, names: langs.map(l => [l.code, l.name]) };
+    await DB.put('kv', data, 'langdata');
+    applyLangData(data);
+  } catch {
+    /* offline: try again next time */
+  } finally {
+    L.loading = false;
+  }
+}
+const flagHtml = ch => { const cc = countryOf(ch); return cc ? `<span class="flag" title="${esc(countryName(cc))}">${countryFlag(cc)}</span>` : ''; };
+
 const QUALITY = /\b(hd|fhd|uhd|sd|4k|hevc|h\.?265)\b/gi;
 const cleanName = n => n.replace(/\([^)]*\)|\[[^\]]*\]/g, ' ').replace(QUALITY, ' ').replace(/\s+/g, ' ').trim();
 function channelKey(e) {
@@ -250,7 +335,7 @@ function mergeChannels(entries) {
     const key = channelKey(e);
     let ch = map.get(key);
     if (!ch) {
-      ch = { key, name: cleanName(e.name) || e.name, logo: e.logo, group: e.group, country: countryFromId(e.id), sources: [] };
+      ch = { key, name: cleanName(e.name) || e.name, logo: e.logo, group: e.group, country: e.cc || countryFromId(e.id), sources: [] };
       map.set(key, ch);
     } else {
       if (!ch.logo) ch.logo = e.logo;
@@ -260,8 +345,12 @@ function mergeChannels(entries) {
       for (const g of e.group.split(';')) if (g.trim()) groups.add(g.trim());
       ch.group = [...groups].join(';');
     }
-    if (!ch.country) ch.country = countryFromId(e.id);
-    if (!ch.sources.some(s => s.url === e.url)) ch.sources.push({ url: e.url, name: e.name, hdr: e.hdr, geo: e.geo, part: e.part });
+    if (!ch.country) ch.country = e.cc || countryFromId(e.id);
+    if (!ch.sources.some(s => s.url === e.url)) {
+      const src = { url: e.url, name: e.name, hdr: e.hdr, geo: e.geo, part: e.part };
+      if (e.langs.length) src.langs = e.langs; // only kept when the playlist says so
+      ch.sources.push(src);
+    }
   }
   return [...map.values()];
 }
@@ -641,8 +730,8 @@ function renderList() {
     const st = channelStatus(ch);
     const fav = S.favs.has(ch.key);
     const active = S.current && S.current.key === ch.key;
-    const cc = countryOf(ch);
-    const more = (ch.sources.length > 1 ? ` · ${ch.sources.length} sources` : '') + (cc ? ` · ${countryFlag(cc)}` : '');
+    const lt = langTag(ch);
+    const more = (lt ? ` · ${lt}` : '') + (ch.sources.length > 1 ? ` · ${ch.sources.length} sources` : '');
     // Grey until proven good; blue once a test or a real play shows it streams well.
     const good = st.cls === 'good';
     const litAgo = good ? Date.now() - (S.lit.get(ch.key) || 0) : Infinity;
@@ -658,7 +747,7 @@ function renderList() {
       <div class="ch-body">
         <div class="logo">${ch.logo ? `<img src="${esc(ch.logo)}" loading="lazy" referrerpolicy="no-referrer" alt="" onerror="this.remove()">` : '▶'}</div>
         <div class="info">
-          <div class="name">${esc(ch.name)}</div>
+          <div class="name">${flagHtml(ch)}${esc(ch.name)}</div>
           <div class="meta">${badge}${tagsHtml(ch)}<span class="grp">${esc(groupLabel(ch) + more)}</span></div>
         </div>
         <button class="star${fav ? ' on' : ''}" data-star="${i}" tabindex="-1" title="${fav ? 'Remove from' : 'Add to'} favorites" aria-label="${fav ? 'Remove from' : 'Add to'} favorites">${fav ? '★' : '☆'}</button>
@@ -692,11 +781,19 @@ function rebuildGroups() {
   const src = sourceChannels();
   const counts = new Map();
   const countries = new Map();
+  const langs = new Map();
   for (const c of src) {
     for (const g of groupsOf(c)) counts.set(g, (counts.get(g) || 0) + 1);
     const cc = countryOf(c);
     if (cc) countries.set(cc, (countries.get(cc) || 0) + 1);
+    for (const l of langsOf(c)) langs.set(l, (langs.get(l) || 0) + 1);
   }
+  const lcs = [...langs.keys()].map(l => [l, langName(l)]).sort((a, b) => a[1].localeCompare(b[1]));
+  if (!langs.has(S.ui.lang)) S.ui.lang = '';
+  const lsel = $('#langFilter');
+  lsel.classList.toggle('hidden', lcs.length < 2);
+  lsel.innerHTML = `<option value="">Language: all</option>` +
+    lcs.map(([l, name]) => `<option value="${esc(l)}"${l === S.ui.lang ? ' selected' : ''}>${esc(name)} (${langs.get(l)})</option>`).join('');
   const groups = [...counts.keys()].sort((a, b) => a.localeCompare(b));
   if (!counts.has(S.ui.group)) S.ui.group = '';
   $('#groupFilter').innerHTML = `<option value="">Group: all</option>` +
@@ -719,6 +816,7 @@ function applyFilters(keepScroll = false) {
     if (q && !ch.name.toLowerCase().includes(q) && !ch.group.toLowerCase().includes(q)) continue;
     if (g && !groupsOf(ch).includes(g)) continue;
     if (cc && countryOf(ch) !== cc) continue;
+    if (S.ui.lang && !langsOf(ch).includes(S.ui.lang)) continue;
     const cls = needStatus ? channelStatus(ch).cls : '';
     if (!passFilter(ch, cls, f)) continue;
     rows.push({ ch, r: RANK[cls] ?? 0 });
@@ -1252,9 +1350,10 @@ function renderNow() {
   const src = ch.sources.find(s => s.url === url) || ch.sources[0];
   const st = channelStatus(ch);
   const h = S.health.get(src.url);
-  $('#nowName').textContent = ch.name;
+  $('#nowName').innerHTML = flagHtml(ch) + esc(ch.name);
   const cc = countryOf(ch);
-  $('#nowMeta').innerHTML = `CH ${chNum(ch)} · ${cc ? `${countryFlag(cc)} ${esc(countryName(cc))} · ` : ''}${esc(groupLabel(ch))} · ${badgeHtml(st, 'Untested')} ${tagsHtml(ch)}`;
+  const langNames = langsOf(ch).map(langName).join(', ');
+  $('#nowMeta').innerHTML = `CH ${chNum(ch)} · ${cc ? `${esc(countryName(cc))} · ` : ''}${langNames ? `${esc(langNames)} · ` : ''}${esc(groupLabel(ch))} · ${badgeHtml(st, 'Untested')} ${tagsHtml(ch)}`;
   const logo = $('#nowLogo');
   logo.classList.toggle('hidden', !ch.logo);
   if (ch.logo) { logo.src = ch.logo; logo.onerror = () => logo.classList.add('hidden'); }
@@ -1384,6 +1483,7 @@ async function selectPlaylist(id, parsed) {
   rebuildGroups();
   applyFilters();
   backgroundRefresh(S.playlists.find(p => p.id === id));
+  loadLanguages();
 }
 async function savePlaylistText(p, text, chs) {
   await DB.put('kv', text, 'pl:' + p.id);
@@ -1647,6 +1747,7 @@ function wire() {
   });
 
   $('#countryFilter').addEventListener('change', e => { S.ui.country = e.target.value; saveUi(); applyFilters(); });
+  $('#langFilter').addEventListener('change', e => { S.ui.lang = e.target.value; saveUi(); applyFilters(); });
 
   // Keyboard / TV remote:
   //   ↑ ↓  move the highlight in the guide     Enter / OK  play it

@@ -22,7 +22,8 @@ A browser-based player for M3U / M3U8 IPTV playlists, styled like a 70s wood-pan
 - **Learns from watching**: start time, failures and buffering are recorded every time you play a channel.
 - **Your own ratings**: 👍 Smooth / ⚠ Buffers / ✖ Broken. Your rating always beats test results.
 - **Favorites** (★) work across all your playlists.
-- **Filters**: search, country, group, Working only, Hide broken, Hide geo-blocked, Untested.
+- **Country and language**: every channel shows its country flag before its name and its language(s) underneath (e.g. ARA·FRA). For iptv-org channels the country comes from the channel id and the language from iptv-org's channel data (refreshed every few days); other playlists can provide `tvg-country` and `tvg-language`. Flags use a small flags-only font so they also show on Windows.
+- **Filters**: search, country, language, group, Working only, Hide broken, Hide geo-blocked, Untested.
 - **Playlist warnings**: channels iptv-org marks as geo-blocked or not on air 24/7 get GEO / PART-TIME tags, and those sources are tried last.
 - **Recently watched**: the last 40 channels you actually watched, from any playlist.
 - **Remembers volume** and mute between channels and visits.
