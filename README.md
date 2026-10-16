@@ -21,9 +21,12 @@ A browser-based player for M3U / M3U8 IPTV playlists, styled like a 70s wood-pan
 - **Learns from watching**: start time, failures and buffering are recorded every time you play a channel.
 - **Your own ratings**: 👍 Smooth / ⚠ Buffers / ✖ Broken. Your rating always beats test results.
 - **Favorites** (★) work across all your playlists.
-- **Filters**: search, group, Working only, Hide broken, Untested.
+- **Filters**: search, country, group, Working only, Hide broken, Hide geo-blocked, Untested.
+- **Playlist warnings**: channels iptv-org marks as geo-blocked or not on air 24/7 get GEO / PART-TIME tags, and those sources are tried last.
+- **Recently watched**: the last 40 channels you actually watched, from any playlist.
+- **Remembers volume** and mute between channels and visits.
 - **Auto-skip** (in Settings): jumps to the next working channel when one fails or times out.
-- **Keyboard**: ↑/↓ change channel, type a channel number to jump to it, `F` toggles favorite.
+- **Keyboard / TV remote**: ↑↓ move through the guide, Enter plays, ←→ previous/next channel, PgUp/PgDn jump a page, type a channel number to jump, `F` favorite, Space pause, Esc back to what's playing.
 - **Retro look**: wood-cabinet TV with a channel dial on desktop, a full-width player with a control strip on phones. Scanlines and static between channels can be switched off in Settings.
 
 ## Your data stays in your browser

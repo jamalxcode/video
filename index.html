@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=13">
+<link rel="stylesheet" href="style.css?v=15">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://iptv-org.github.io" crossorigin>
 </head>
@@ -84,7 +84,7 @@
 
   <aside class="sidebar guide">
     <div class="guide-head">
-      <span>TV GUIDE <span class="help" tabindex="0" title="Type a channel number to jump · ↑↓ change channel · F favorite" aria-label="Keyboard shortcuts: type a channel number to jump, up and down arrows change channel, F toggles favorite">?</span></span>
+      <span>TV GUIDE <span class="help" tabindex="0" title="Remote / keyboard: ↑↓ move · Enter play · ←→ prev/next channel · PgUp/PgDn page · 0-9 channel number · F favorite · Space pause · Esc back to playing" aria-label="Keyboard shortcuts: up and down arrows move through the guide, Enter plays, left and right change channel, Page Up and Page Down jump a page, type a channel number to jump, F toggles favorite, Space pauses, Escape returns to the playing channel">?</span></span>
       <span id="count" class="count"></span>
     </div>
     <div class="filters">
@@ -93,22 +93,25 @@
         <button id="testBtn" title="Check the channels in the current list">Test channels</button>
       </div>
       <div class="frow frow3">
+        <select id="countryFilter" title="Country" aria-label="Country"></select>
         <select id="groupFilter" title="Group" aria-label="Group"></select>
         <select id="statusFilter" title="Show" aria-label="Show">
-          <option value="all">All channels</option>
+          <option value="all">Show: all</option>
           <option value="fav">★ Favorites</option>
+          <option value="recent">🕘 Recently watched</option>
           <option value="good">Working only</option>
           <option value="hideBad">Hide broken</option>
+          <option value="noGeo">Hide geo-blocked</option>
           <option value="untested">Untested</option>
         </select>
         <select id="sortSel" title="Sort order" aria-label="Sort">
-          <option value="">Playlist order</option>
-          <option value="best">Best first</option>
-          <option value="name">Name A–Z</option>
+          <option value="">Sort: playlist</option>
+          <option value="best">Sort: best first</option>
+          <option value="name">Sort: A–Z</option>
         </select>
       </div>
     </div>
-    <div id="list" class="list"><div id="listInner"></div></div>
+    <div id="list" class="list" tabindex="0" role="listbox" aria-label="TV guide channels"><div id="listInner"></div></div>
     <div class="guide-foot">
       <span id="testProgress"></span>
       <span class="legend">
@@ -174,6 +177,6 @@
 </dialog>
 
 <div id="toast" class="toast hidden"></div>
-<script src="app.js?v=13"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>

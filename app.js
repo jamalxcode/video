@@ -147,7 +147,9 @@ const S = {
   hosts: new Map(),     // server host -> { ok, blocked, dead } from recent tests
   favs: new Map(),      // channel key -> saved channel
   settings: { ...DEFAULT_SETTINGS },
-  ui: { currentId: null, search: '', group: '', status: 'all', sort: '', lastKey: '' },
+  ui: { currentId: null, search: '', group: '', country: '', status: 'all', sort: '', lastKey: '', volume: 1, muted: false },
+  recent: [],           // recently watched channels, newest first (saved copies, so they work across playlists)
+  cursor: -1,           // highlighted guide row for arrow-key / remote navigation
   current: null,
   loading: '',          // message shown in the list while a playlist downloads
 };
@@ -203,11 +205,33 @@ function parseM3U(text) {
         id: cur?.id || '',
         url,
         hdr: needsHeaders(ua, ref),
+        // iptv-org marks these in the name: "Channel (720p) [Geo-blocked] [Not 24/7]"
+        geo: /\[geo[- ]?blocked\]/i.test(cur?.name || ''),
+        part: /\[not 24\/7\]/i.test(cur?.name || ''),
       });
       cur = null;
     }
   }
   return out;
+}
+
+// iptv-org ids end in a country code: "CNN.us@HD" -> "us". Older saved channels: read it from the key.
+const countryFromId = id => ((id || '').match(/\.([a-z]{2})(?:@|$)/i) || [])[1]?.toLowerCase() || '';
+const countryOf = ch => ch.country || countryFromId((ch.key || '').replace(/^id:/, ''));
+const regionNames = (() => { try { return new Intl.DisplayNames(['en'], { type: 'region' }); } catch { return null; } })();
+function countryName(cc) {
+  const iso = cc === 'uk' ? 'GB' : cc.toUpperCase();
+  try { return regionNames?.of(iso) || iso; } catch { return iso; }
+}
+const countryFlag = cc => (cc ? [...(cc === 'uk' ? 'gb' : cc).toUpperCase()].map(c => String.fromCodePoint(0x1f1a5 + c.charCodeAt(0))).join('') : '');
+// Warnings from the playlist: all sources geo-blocked / all sources part-time.
+const isGeo = ch => ch.sources.length > 0 && ch.sources.every(s => s.geo);
+const isPartTime = ch => ch.sources.length > 0 && ch.sources.every(s => s.part);
+function tagsHtml(ch) {
+  let t = '';
+  if (isGeo(ch)) t += '<span class="tag" title="Geo-blocked: may only work in its home country">GEO</span>';
+  if (isPartTime(ch)) t += '<span class="tag" title="Not on air 24/7: may be off at times">PART-TIME</span>';
+  return t;
 }
 
 const QUALITY = /\b(hd|fhd|uhd|sd|4k|hevc|h\.?265)\b/gi;
@@ -225,7 +249,7 @@ function mergeChannels(entries) {
     const key = channelKey(e);
     let ch = map.get(key);
     if (!ch) {
-      ch = { key, name: cleanName(e.name) || e.name, logo: e.logo, group: e.group, sources: [] };
+      ch = { key, name: cleanName(e.name) || e.name, logo: e.logo, group: e.group, country: countryFromId(e.id), sources: [] };
       map.set(key, ch);
     } else {
       if (!ch.logo) ch.logo = e.logo;
@@ -235,7 +259,8 @@ function mergeChannels(entries) {
       for (const g of e.group.split(';')) if (g.trim()) groups.add(g.trim());
       ch.group = [...groups].join(';');
     }
-    if (!ch.sources.some(s => s.url === e.url)) ch.sources.push({ url: e.url, name: e.name, hdr: e.hdr });
+    if (!ch.country) ch.country = countryFromId(e.id);
+    if (!ch.sources.some(s => s.url === e.url)) ch.sources.push({ url: e.url, name: e.name, hdr: e.hdr, geo: e.geo, part: e.part });
   }
   return [...map.values()];
 }
@@ -296,7 +321,7 @@ function sourceStatus(src) {
 // Sources best-first: what worked before, then untested, then known-bad. HTTPS beats HTTP on an HTTPS page.
 function orderedSources(ch) {
   return ch.sources
-    .map((s, i) => ({ s, r: RANK[sourceStatus(s).cls] + (isMixed(s.url) ? 0.5 : 0), i }))
+    .map((s, i) => ({ s, r: RANK[sourceStatus(s).cls] + (isMixed(s.url) ? 0.5 : 0) + (s.geo ? 0.3 : 0) + (s.part ? 0.2 : 0), i }))
     .sort((a, b) => a.r - b.r || a.i - b.i)
     .map(x => x.s);
 }
@@ -576,6 +601,7 @@ function renderList() {
   const list = $('#list');
   const inner = $('#listInner');
   const n = S.filtered.length;
+  list.setAttribute('aria-activedescendant', S.cursor >= 0 && S.cursor < n ? 'ch-' + S.cursor : '');
   if (!n) {
     inner.style.height = 'auto';
     inner.innerHTML = S.loading
@@ -584,7 +610,9 @@ function renderList() {
       ? '<div class="empty">No playlist yet.<br><button class="primary" data-act="add">+ Add a playlist</button></div>'
       : S.ui.status === 'fav' && !S.favs.size
         ? '<div class="empty">No favorites yet.<br>Tap ☆ next to a channel to save it here.</div>'
-        : '<div class="empty">No channels match.</div>';
+        : S.ui.status === 'recent' && !S.recent.length
+          ? '<div class="empty">Nothing watched yet.<br>Channels you play show up here.</div>'
+          : '<div class="empty">No channels match.</div>';
     return;
   }
   inner.style.height = n * ROW + 'px';
@@ -596,16 +624,17 @@ function renderList() {
     const st = channelStatus(ch);
     const fav = S.favs.has(ch.key);
     const active = S.current && S.current.key === ch.key;
-    const more = ch.sources.length > 1 ? ` · ${ch.sources.length} sources` : '';
-    html += `<div class="ch${active ? ' active' : ''}" data-i="${i}" style="top:${i * ROW}px" title="${esc(ch.name + ' — ' + st.tip)}">
+    const cc = countryOf(ch);
+    const more = (ch.sources.length > 1 ? ` · ${ch.sources.length} sources` : '') + (cc ? ` · ${countryFlag(cc)}` : '');
+    html += `<div class="ch${active ? ' active' : ''}${i === S.cursor ? ' cursor' : ''}" id="ch-${i}" role="option" aria-selected="${i === S.cursor}" data-i="${i}" style="top:${i * ROW}px" title="${esc(ch.name + ' — ' + st.tip)}">
       <span class="ch-num">${chNum(ch)}</span>
       <div class="ch-body">
         <div class="logo">${ch.logo ? `<img src="${esc(ch.logo)}" loading="lazy" referrerpolicy="no-referrer" alt="" onerror="this.remove()">` : '▶'}</div>
         <div class="info">
           <div class="name">${esc(ch.name)}</div>
-          <div class="meta">${badgeHtml(st)}<span class="grp">${esc(groupLabel(ch) + more)}</span></div>
+          <div class="meta">${badgeHtml(st)}${tagsHtml(ch)}<span class="grp">${esc(groupLabel(ch) + more)}</span></div>
         </div>
-        <button class="star${fav ? ' on' : ''}" data-star="${i}" title="${fav ? 'Remove from' : 'Add to'} favorites" aria-label="${fav ? 'Remove from' : 'Add to'} favorites">${fav ? '★' : '☆'}</button>
+        <button class="star${fav ? ' on' : ''}" data-star="${i}" tabindex="-1" title="${fav ? 'Remove from' : 'Add to'} favorites" aria-label="${fav ? 'Remove from' : 'Add to'} favorites">${fav ? '★' : '☆'}</button>
       </div>
     </div>`;
   }
@@ -619,42 +648,58 @@ const chNum = ch => S.numByKey.get(ch.key) ?? '★';
 // A channel can sit in several groups, written "News;Sports" (iptv-org does this).
 const groupsOf = ch => ch.group.split(';').map(g => g.trim()).filter(Boolean);
 const groupLabel = ch => groupsOf(ch).join(', ');
-function passStatus(cls, f) {
+function passFilter(ch, cls, f) {
   if (f === 'good') return cls === 'good';
   if (f === 'hideBad') return !isBadCls(cls);
   if (f === 'untested') return cls === 'untested';
+  if (f === 'noGeo') return !isGeo(ch);
   return true;
 }
 function sourceChannels() {
-  return S.ui.status === 'fav'
-    ? [...S.favs.values()].map(f => S.byKey.get(f.key) || f).sort((a, b) => a.name.localeCompare(b.name))
-    : S.channels;
+  if (S.ui.status === 'fav') return [...S.favs.values()].map(f => S.byKey.get(f.key) || f).sort((a, b) => a.name.localeCompare(b.name));
+  if (S.ui.status === 'recent') return S.recent.map(r => S.byKey.get(r.key) || r); // newest first
+  return S.channels;
 }
+// Group and country menus, with counts for what the current list holds.
 function rebuildGroups() {
   const src = sourceChannels();
   const counts = new Map();
-  for (const c of src) for (const g of groupsOf(c)) counts.set(g, (counts.get(g) || 0) + 1);
+  const countries = new Map();
+  for (const c of src) {
+    for (const g of groupsOf(c)) counts.set(g, (counts.get(g) || 0) + 1);
+    const cc = countryOf(c);
+    if (cc) countries.set(cc, (countries.get(cc) || 0) + 1);
+  }
   const groups = [...counts.keys()].sort((a, b) => a.localeCompare(b));
   if (!counts.has(S.ui.group)) S.ui.group = '';
-  $('#groupFilter').innerHTML = `<option value="">All groups (${groups.length})</option>` +
+  $('#groupFilter').innerHTML = `<option value="">Group: all</option>` +
     groups.map(g => `<option value="${esc(g)}"${g === S.ui.group ? ' selected' : ''}>${esc(g)} (${counts.get(g)})</option>`).join('');
+  const ccs = [...countries.keys()].map(cc => [cc, countryName(cc)]).sort((a, b) => a[1].localeCompare(b[1]));
+  if (!countries.has(S.ui.country)) S.ui.country = '';
+  const sel = $('#countryFilter');
+  sel.classList.toggle('hidden', ccs.length < 2);
+  sel.innerHTML = `<option value="">Country: all</option>` +
+    ccs.map(([cc, name]) => `<option value="${cc}"${cc === S.ui.country ? ' selected' : ''}>${countryFlag(cc)} ${esc(name)} (${countries.get(cc)})</option>`).join('');
 }
 function applyFilters(keepScroll = false) {
   const q = S.ui.search.toLowerCase().trim();
   const g = S.ui.group;
+  const cc = S.ui.country;
   const f = S.ui.status;
-  const needStatus = (f !== 'all' && f !== 'fav') || S.ui.sort === 'best';
+  const needStatus = ['good', 'hideBad', 'untested'].includes(f) || S.ui.sort === 'best';
   const rows = [];
   for (const ch of sourceChannels()) {
     if (q && !ch.name.toLowerCase().includes(q) && !ch.group.toLowerCase().includes(q)) continue;
     if (g && !groupsOf(ch).includes(g)) continue;
+    if (cc && countryOf(ch) !== cc) continue;
     const cls = needStatus ? channelStatus(ch).cls : '';
-    if (!passStatus(cls, f)) continue;
+    if (!passFilter(ch, cls, f)) continue;
     rows.push({ ch, r: RANK[cls] ?? 0 });
   }
   if (S.ui.sort === 'best') rows.sort((a, b) => a.r - b.r);
   else if (S.ui.sort === 'name') rows.sort((a, b) => a.ch.name.localeCompare(b.ch.name));
   S.filtered = rows.map(x => x.ch);
+  S.cursor = S.current ? S.filtered.findIndex(c => c.key === S.current.key) : -1;
   const total = sourceChannels().length;
   $('#count').textContent = S.filtered.length === total ? `${total} channels` : `${S.filtered.length} of ${total}`;
   if (!keepScroll) $('#list').scrollTop = 0;
@@ -662,9 +707,7 @@ function applyFilters(keepScroll = false) {
   clearTimeout(scrollIdle);
   scrollIdle = setTimeout(autoTestVisible, 400);
 }
-function scrollToCurrent() {
-  if (!S.current) return;
-  const i = S.filtered.findIndex(c => c.key === S.current.key);
+function scrollToIndex(i) {
   if (i < 0) return;
   const list = $('#list');
   const y = i * ROW;
@@ -672,6 +715,21 @@ function scrollToCurrent() {
     list.scrollTop = y - listHeight() / 2 + ROW / 2;
   }
 }
+function scrollToCurrent() {
+  if (S.current) scrollToIndex(S.filtered.findIndex(c => c.key === S.current.key));
+}
+// Remote-style guide navigation: a highlighted row you move with the arrows and play with Enter.
+function moveCursor(to) {
+  const n = S.filtered.length;
+  if (!n) return;
+  S.cursor = Math.max(0, Math.min(n - 1, to));
+  scrollToIndex(S.cursor);
+  scheduleRender();
+  const ch = S.filtered[S.cursor];
+  preconnect(orderedSources(ch)[0].url);
+}
+const cursorStart = () => (S.cursor >= 0 ? S.cursor : S.current ? Math.max(0, S.filtered.findIndex(c => c.key === S.current.key)) : -1);
+const pageRows = () => Math.max(1, Math.floor(listHeight() / ROW) - 1);
 
 /* =========================================================================
    Playback: hls.js for HLS, mpegts.js for raw TS/FLV, the browser for the rest.
@@ -863,6 +921,8 @@ function playChannel(ch, startUrl) {
   teardown();
   S.current = ch;
   S.ui.lastKey = ch.key;
+  const idx = S.filtered.findIndex(c => c.key === ch.key);
+  if (idx >= 0) S.cursor = idx; // the guide highlight follows what you tune to
   saveUi();
   let order = orderedSources(ch);
   if (startUrl) order = [order.find(s => s.url === startUrl), ...order.filter(s => s.url !== startUrl)].filter(Boolean);
@@ -1009,6 +1069,7 @@ video.addEventListener('playing', () => {
   TV.picture(s.ch);
   s.started = true;
   s.liveAt = Date.now();
+  addRecent(s.ch);
   clearTimeout(startTimer);
   const ms = performance.now() - s.t0;
   const h = H(s.url);
@@ -1085,7 +1146,8 @@ function renderNow() {
   const st = channelStatus(ch);
   const h = S.health.get(src.url);
   $('#nowName').textContent = ch.name;
-  $('#nowMeta').innerHTML = `CH ${chNum(ch)} · ${esc(groupLabel(ch))} · ${badgeHtml(st, 'Untested')}`;
+  const cc = countryOf(ch);
+  $('#nowMeta').innerHTML = `CH ${chNum(ch)} · ${cc ? `${countryFlag(cc)} ${esc(countryName(cc))} · ` : ''}${esc(groupLabel(ch))} · ${badgeHtml(st, 'Untested')} ${tagsHtml(ch)}`;
   const logo = $('#nowLogo');
   logo.classList.toggle('hidden', !ch.logo);
   if (ch.logo) { logo.src = ch.logo; logo.onerror = () => logo.classList.add('hidden'); }
@@ -1126,7 +1188,7 @@ function setRating(r) {
   saveH(h);
   toast(r ? 'Rating saved for this source' : 'Rating cleared');
 }
-const favRecord = ch => ({ key: ch.key, name: ch.name, logo: ch.logo, group: ch.group, sources: ch.sources, addedAt: Date.now() });
+const favRecord = ch => ({ key: ch.key, name: ch.name, logo: ch.logo, group: ch.group, country: countryOf(ch), sources: ch.sources, addedAt: Date.now() });
 function toggleFav(ch) {
   if (S.favs.has(ch.key)) {
     S.favs.delete(ch.key);
@@ -1275,7 +1337,7 @@ async function deletePlaylist() {
 async function exportData() {
   const data = {
     app: 'm3u-player', version: 2, exportedAt: new Date().toISOString(),
-    settings: S.settings, favs: [...S.favs.values()], health: [...S.health.values()], playlists: [],
+    settings: S.settings, favs: [...S.favs.values()], health: [...S.health.values()], recent: S.recent, playlists: [],
   };
   for (const p of S.playlists) data.playlists.push({ ...p, text: await DB.get('kv', 'pl:' + p.id) });
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
@@ -1292,6 +1354,11 @@ async function importData(file) {
     if (data.settings) { S.settings = { ...DEFAULT_SETTINGS, ...data.settings }; await DB.put('kv', S.settings, 'settings'); }
     for (const old of data.favs || []) { const f = upgradeFav(old); S.favs.set(f.key, f); await DB.put('favs', f); }
     for (const h of data.health || []) { S.health.set(h.url, h); await DB.put('health', h); }
+    if (data.recent?.length) {
+      const seen = new Set(S.recent.map(r => r.key));
+      S.recent = [...S.recent, ...data.recent.filter(r => !seen.has(r.key))].slice(0, RECENT_MAX);
+      await DB.put('kv', S.recent, 'recent');
+    }
     for (const p of data.playlists || []) {
       if (S.playlists.some(x => x.id === p.id) || !p.text) continue;
       const { text, ...meta } = p;
@@ -1357,7 +1424,7 @@ function wire() {
     const star = e.target.closest('[data-star]');
     if (star) { e.stopPropagation(); return toggleFav(S.filtered[+star.dataset.star]); }
     const row = e.target.closest('.ch');
-    if (row) playChannel(S.filtered[+row.dataset.i]);
+    if (row) { $('#list').focus({ preventScroll: true }); playChannel(S.filtered[+row.dataset.i]); }
   });
   // Hovering a channel: get the player library and the stream's server connection ready.
   $('#listInner').addEventListener('pointerover', e => {
@@ -1471,13 +1538,45 @@ function wire() {
     else if (a === 'rate-buffers') { setRating('buffers'); hideOverlay(); }
   });
 
+  $('#countryFilter').addEventListener('change', e => { S.ui.country = e.target.value; saveUi(); applyFilters(); });
+
+  // Keyboard / TV remote:
+  //   ↑ ↓  move the highlight in the guide     Enter / OK  play it
+  //   PgUp PgDn  jump a page                   Home End    first / last
+  //   ← →  previous / next channel (zap)       Esc         back to what's playing
+  //   0-9  type a channel number               F favorite · Space pause
   document.addEventListener('keydown', e => {
     if (e.target.closest?.('input, textarea, select, dialog') || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (/^[0-9]$/.test(e.key)) return typeChannelDigit(e.key);
-    if (e.key === 'ArrowDown' || e.key === 'n') { e.preventDefault(); step(1); }
-    else if (e.key === 'ArrowUp' || e.key === 'p') { e.preventDefault(); step(-1); }
-    else if (e.key === 'f' && S.current) toggleFav(S.current);
+    const onButton = !!e.target.closest?.('button, a, video');
+    const k = e.key;
+    if (/^[0-9]$/.test(k)) return typeChannelDigit(k);
+    const handled = () => e.preventDefault();
+    if (k === 'ArrowDown' || k === 'ArrowUp') { handled(); const c = cursorStart(); moveCursor(c < 0 ? 0 : c + (k === 'ArrowDown' ? 1 : -1)); }
+    else if (k === 'PageDown' || k === 'PageUp') { handled(); moveCursor(Math.max(0, cursorStart()) + (k === 'PageDown' ? 1 : -1) * pageRows()); }
+    else if (k === 'Home' || k === 'End') { handled(); moveCursor(k === 'Home' ? 0 : S.filtered.length - 1); }
+    else if (k === 'Enter' && !onButton && S.cursor >= 0 && S.filtered[S.cursor]) { handled(); playChannel(S.filtered[S.cursor]); }
+    else if (['ArrowRight', 'n', 'ChannelUp', 'MediaTrackNext'].includes(k)) { handled(); step(1); }
+    else if (['ArrowLeft', 'p', 'ChannelDown', 'MediaTrackPrevious'].includes(k)) { handled(); step(-1); }
+    else if (k === 'Escape') { S.cursor = S.current ? S.filtered.findIndex(c => c.key === S.current.key) : -1; scrollToCurrent(); scheduleRender(); }
+    else if (k === 'f' || k === 'F') { const ch = S.filtered[S.cursor] || S.current; if (ch) toggleFav(ch); }
+    else if (k === ' ' && !onButton && session?.started) { handled(); video.paused ? video.play().catch(() => {}) : video.pause(); }
   });
+
+  // Remember volume and mute between channels and visits.
+  let volTimer;
+  video.addEventListener('volumechange', () => {
+    clearTimeout(volTimer);
+    volTimer = setTimeout(() => { S.ui.volume = video.volume; S.ui.muted = video.muted; saveUi(); }, 300);
+  });
+}
+// Recently watched: newest first, saved copies so they work from any playlist.
+const RECENT_MAX = 40;
+function addRecent(ch) {
+  const rec = { ...favRecord(ch), at: Date.now() };
+  delete rec.addedAt;
+  S.recent = [rec, ...S.recent.filter(r => r.key !== ch.key)].slice(0, RECENT_MAX);
+  DB.put('kv', S.recent, 'recent');
+  if (S.ui.status === 'recent') { rebuildGroups(); applyFilters(true); }
 }
 // Like a remote: type a channel number, it tunes in after a short pause.
 let numBuf = '', numTimer;
@@ -1501,9 +1600,10 @@ function copyLink() {
 
 async function init() {
   wire();
-  const [pls, settings, ui, health, favs] = await Promise.all([
-    DB.get('kv', 'playlists'), DB.get('kv', 'settings'), DB.get('kv', 'ui'), DB.all('health'), DB.all('favs'),
+  const [pls, settings, ui, health, favs, recentList] = await Promise.all([
+    DB.get('kv', 'playlists'), DB.get('kv', 'settings'), DB.get('kv', 'ui'), DB.all('health'), DB.all('favs'), DB.get('kv', 'recent'),
   ]);
+  S.recent = recentList || [];
   S.playlists = pls || [];
   S.settings = { ...DEFAULT_SETTINGS, ...(settings || {}) };
   S.ui = { ...S.ui, ...(ui || {}) };
@@ -1514,6 +1614,9 @@ async function init() {
   }
   for (const f of favs || []) S.favs.set(f.key, f);
   $('#search').value = S.ui.search;
+  const vol = Number(S.ui.volume ?? 1);
+  video.volume = Number.isFinite(vol) ? Math.min(1, Math.max(0, vol)) : 1;
+  video.muted = !!S.ui.muted;
   TV.refreshFx();
   TV.idle();
 

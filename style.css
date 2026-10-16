@@ -318,3 +318,13 @@ dialog textarea { min-height: 80px; font: 12px/1.4 ui-monospace, Consolas, monos
   .list { height: 62vh; flex: none; }
   .ch-num { width: 50px; font-size: 20px; }
 }
+
+/* guide highlight for keyboard / remote navigation */
+.ch.cursor .ch-body, .ch.cursor .ch-num { box-shadow: inset 0 0 0 3px var(--hi); }
+.ch.cursor:not(.active) .ch-body { background: #3127c4; }
+.list:focus { outline: none; }
+.list:focus-visible { box-shadow: inset 0 0 0 2px var(--hi); }
+/* playlist warnings: geo-blocked, part-time */
+.tag { font: 14px/1 var(--pixel); color: var(--hi); border: 1px solid currentColor; border-radius: 3px; padding: 1px 4px; letter-spacing: .04em; flex: none; }
+.ch.active .tag { color: var(--guide); }
+#nowMeta .tag { font-size: 16px; vertical-align: 2px; }
