@@ -716,20 +716,95 @@ const TV = (() => {
     osdTimer = setTimeout(() => osd.classList.remove('on'), ms);
   }
   const osdChannel = ch => osdShow(`CH ${chNum(ch)}<small>${esc(ch.name)}</small>`);
-  return {
-    idle() { snow(false); card.classList.remove('hidden'); },
+  const api = {
+    state: 'standby', // standby | tuning | live | buffering | nosignal — shown on the VCR display
+    setState(s) { api.state = s; VFD.update(); },
+    idle() { snow(false); card.classList.remove('hidden'); api.setState('standby'); },
     tune(ch) {
       card.classList.add('hidden');
       snow(true);
       osdChannel(ch);
       const n = typeof chNum(ch) === 'number' ? chNum(ch) : 0;
       dial.style.transform = `rotate(${n * 30}deg)`;
+      api.setState('tuning');
     },
-    picture(ch) { snow(false); card.classList.add('hidden'); if (ch) osdChannel(ch); },
-    noSignal() { card.classList.add('hidden'); snow(true, true); },
+    picture(ch) { snow(false); card.classList.add('hidden'); if (ch) osdChannel(ch); api.setState('live'); },
+    noSignal() { card.classList.add('hidden'); snow(true, true); api.setState('nosignal'); },
     osdShow,
     refreshFx() { document.body.classList.toggle('fx', S.settings.fx); if (!S.settings.fx) snow(false); },
   };
+  return api;
+})();
+
+/* VCR-style display under the picture: what's on, how well it's playing, what's next. */
+const VFD = (() => {
+  const el = id => document.getElementById(id);
+  const box = $('#vfd');
+  const narrow = matchMedia('(max-width: 820px)'); // same breakpoint as the phone layout
+  const STATE = {
+    standby: ['STANDBY', ''], tuning: ['TUNING…', 'lvl-warn'], live: ['● LIVE', 'lvl-good'],
+    buffering: ['BUFFERING', 'lvl-warn'], nosignal: ['NO SIGNAL', 'lvl-bad'],
+  };
+  const two = n => String(n).padStart(2, '0');
+  function since(ms) {
+    const s = Math.floor(ms / 1000), h = Math.floor(s / 3600);
+    return h ? `${h}:${two(Math.floor(s / 60) % 60)}:${two(s % 60)}` : `${two(Math.floor(s / 60))}:${two(s % 60)}`;
+  }
+  function bufferedAhead() {
+    const t = video.currentTime;
+    for (let i = 0; i < video.buffered.length; i++) {
+      if (video.buffered.start(i) <= t + 0.5 && video.buffered.end(i) >= t) return video.buffered.end(i) - t;
+    }
+    return 0;
+  }
+  function set(id, text, cls = '') {
+    const n = el(id);
+    if (n.textContent !== text) n.textContent = text;
+    n.className = cls;
+  }
+  function update() {
+    const ch = S.current;
+    const s = session && ch && session.ch.key === ch.key ? session : null;
+    const [stateText, stateCls] = STATE[TV.state] || STATE.standby;
+    box.classList.toggle('standby', !ch);
+    set('vfdCh', ch ? String(chNum(ch)) : '--');
+    set('vfdName', ch ? ch.name.toUpperCase() : 'PICK A CHANNEL');
+    set('vfdState', stateText, stateCls);
+    if (ch) {
+      const st = channelStatus(ch);
+      set('vfdSig', `${BARS[st.cls]} ${(st.label || 'UNTESTED').toUpperCase()}`, 'lvl-' + st.cls);
+    } else set('vfdSig', '····');
+    // Picture: resolution, plus bitrate when the player knows it.
+    let pic = '—';
+    if (s?.started && video.videoHeight) {
+      pic = `${video.videoHeight}p`;
+      const lvl = hls?.levels?.[hls.currentLevel];
+      const kbps = lvl?.bitrate ? lvl.bitrate / 1000 : mpeg?.statisticsInfo?.speed ? mpeg.statisticsInfo.speed * 8 : 0;
+      if (kbps) pic += ` · ${(kbps / 1000).toFixed(1)}M`;
+    }
+    set('vfdPic', pic);
+    // Buffer meter: 32 seconds full scale; 8 blocks on desktop, 4 on a phone.
+    const blocks = narrow.matches ? 4 : 8;
+    if (s?.started) {
+      const sec = bufferedAhead();
+      const full = Math.min(blocks, Math.round(sec / (32 / blocks)));
+      set('vfdBuf', `${'▮'.repeat(full)}${'▯'.repeat(blocks - full)} ${Math.round(sec)}s`, sec < 3 ? 'lvl-bad' : sec < 8 ? 'lvl-warn' : 'lvl-good');
+    } else set('vfdBuf', '▯'.repeat(blocks));
+    set('vfdTime', s?.liveAt ? since(Date.now() - s.liveAt) : '--:--');
+    const kind = { hls: 'HLS', mpegts: 'TS', native: 'DIRECT' }[engine] || '';
+    set('vfdSrc', s ? `${s.idx + 1}/${s.order.length}${kind ? ' · ' + kind : ''}` : ch ? `${ch.sources.length} AVAIL` : '—');
+    // Next channel in the guide, with its signal so you know before you switch.
+    const i = ch ? S.filtered.findIndex(c => c.key === ch.key) : -1;
+    const next = S.filtered[(i + 1) % Math.max(S.filtered.length, 1)];
+    if (next && next !== ch) {
+      const st = channelStatus(next);
+      set('vfdNext', `${chNum(next)} ${next.name.toUpperCase()} ${BARS[st.cls]}`, 'lvl-' + st.cls);
+    } else set('vfdNext', '—');
+    set('vfdClock', new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toUpperCase());
+  }
+  setInterval(() => { if (!document.hidden) update(); }, 1000);
+  $('#vfdNextBtn').addEventListener('click', () => step(1));
+  return { update };
 })();
 
 function teardown() {
@@ -930,9 +1005,10 @@ video.addEventListener('playing', () => {
   const s = session;
   if (!s || s.token !== playToken) return;
   hideOverlay();
-  if (s.started) return;
+  if (s.started) { TV.setState('live'); return; } // recovered from buffering
   TV.picture(s.ch);
   s.started = true;
+  s.liveAt = Date.now();
   clearTimeout(startTimer);
   const ms = performance.now() - s.t0;
   const h = H(s.url);
@@ -953,6 +1029,7 @@ video.addEventListener('playing', () => {
 video.addEventListener('waiting', () => {
   const s = session;
   if (!s?.started || s.token !== playToken || s.failed) return;
+  TV.setState('buffering');
   s.stalls++;
   if (s.stalls === 3) {
     const h = H(s.url);

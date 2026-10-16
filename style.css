@@ -66,8 +66,36 @@ button.on { background: var(--hi); border-color: var(--hi); color: var(--guide);
   background: repeating-linear-gradient(92deg, var(--wood1) 0 6px, var(--wood2) 6px 9px, var(--wood3) 9px 15px, var(--wood4) 15px 18px);
   box-shadow: inset 0 0 0 3px var(--wood-edge), inset 0 -12px 30px rgba(0,0,0,.35), 0 18px 30px -14px rgba(0,0,0,.7);
 }
-.bezel { flex: 1; min-width: 0; padding: 14px; border-radius: 18px; background: #1d1a17; box-shadow: inset 0 0 0 2px #000, inset 0 0 18px rgba(0,0,0,.9); }
-.video-wrap { position: relative; background: #000; width: 100%; aspect-ratio: 16 / 9; max-height: 64vh; border-radius: 22px / 18px; overflow: hidden; }
+.bezel {
+  flex: 1; min-width: 0; padding: 14px; border-radius: 18px; background: #1d1a17; box-shadow: inset 0 0 0 2px #000, inset 0 0 18px rgba(0,0,0,.9);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.video-wrap { position: relative; background: #000; width: 100%; aspect-ratio: 16 / 9; max-height: 64vh; border-radius: 22px / 18px; overflow: hidden; flex: none; }
+
+/* VCR-style display under the picture: live info, grows into whatever space the cabinet has */
+.vfd {
+  --vfd: #62f0ff;
+  flex: 1; min-height: 64px; display: grid; gap: 4px 6px; align-content: center;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  padding: 8px 10px; border-radius: 8px;
+  background: #071012; box-shadow: inset 0 0 0 2px #000, inset 0 0 22px rgba(0, 200, 230, .07);
+  font-family: var(--pixel); color: var(--vfd);
+}
+.vfd-cell {
+  display: flex; flex-direction: column; min-width: 0; padding: 3px 8px; text-align: left;
+  border: 1px solid rgba(98, 240, 255, .14); border-radius: 4px; background: transparent; font: inherit; color: inherit;
+}
+.vfd-k { font-size: 14px; line-height: 1; letter-spacing: .1em; color: rgba(98, 240, 255, .55); }
+.vfd-cell b { font-weight: normal; font-size: 22px; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 0 6px rgba(98, 240, 255, .55); }
+.vfd-main, .vfd-next { grid-column: span 2; }
+.vfd-main b { color: var(--hi); text-shadow: 0 0 6px rgba(255, 225, 77, .5); }
+button.vfd-cell { cursor: pointer; }
+button.vfd-cell:hover { border-color: var(--vfd); background: rgba(98, 240, 255, .06); }
+.vfd .lvl-good { color: var(--good); text-shadow: 0 0 6px rgba(66, 255, 107, .5); }
+.vfd .lvl-warn { color: var(--warn); text-shadow: 0 0 6px rgba(255, 176, 59, .5); }
+.vfd .lvl-bad { color: var(--bad); text-shadow: 0 0 6px rgba(255, 90, 79, .5); }
+.vfd .lvl-blocked { color: var(--blocked); }
+.vfd.standby b { opacity: .45; }
 video { width: 100%; height: 100%; display: block; background: #000; }
 /* scanlines + glass curve; never block clicks on the video controls */
 .fx .video-wrap::after {
@@ -157,12 +185,13 @@ video { width: 100%; height: 100%; display: block; background: #000; }
   display: flex; flex-direction: column; min-height: 0; overflow: hidden;
   background: var(--guide); border-radius: 10px; box-shadow: 0 0 0 5px var(--guide-deep), 0 18px 30px -14px rgba(0,0,0,.7);
 }
-.guide-head { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 12px; background: var(--hi); color: var(--guide); font: 26px/1 var(--pixel); letter-spacing: .06em; }
-.guide-head .count { font-size: 20px; }
-.filters { padding: 10px; display: flex; flex-direction: column; gap: 8px; background: var(--guide-deep); }
-.frow { display: flex; gap: 8px; align-items: center; }
+.guide-head { display: flex; justify-content: space-between; align-items: center; padding: 3px 10px; background: var(--hi); color: var(--guide); font: 24px/1 var(--pixel); letter-spacing: .06em; }
+.guide-head .count { font-size: 19px; }
+.filters { padding: 6px; display: flex; flex-direction: column; gap: 5px; background: var(--guide-deep); }
+.filters input, .filters select, .filters button { padding: 3px 6px; font-size: 13px; }
+.frow { display: flex; gap: 5px; align-items: center; }
 .frow select { flex: 1; min-width: 0; }
-#search { width: 100%; }
+#search { flex: 1; min-width: 0; }
 #testBtn { white-space: nowrap; }
 
 .list { flex: 1; overflow-y: auto; position: relative; scrollbar-color: var(--num) var(--guide-deep); }
@@ -208,11 +237,20 @@ video { width: 100%; height: 100%; display: block; background: #000; }
 .badge.blocked, .badge.blocked i { color: var(--blocked); }
 #nowMeta .badge { font-size: 19px; }
 
-.ticker { display: flex; gap: 16px; overflow: hidden; white-space: nowrap; background: var(--guide-deep); color: #9fd0ff; font: 19px/1.3 var(--pixel); padding: 3px 10px; }
-#testProgress { color: var(--hi); }
+/* One slim footer line: test progress (while testing) + compact legend */
+.guide-foot {
+  display: flex; align-items: center; gap: 10px; padding: 3px 8px; overflow: hidden; white-space: nowrap;
+  background: var(--guide-deep); border-top: 2px solid var(--guide); font: 15px/1.2 var(--pixel);
+}
+#testProgress { color: var(--hi); flex: none; }
 #testProgress:empty { display: none; }
-.ticker-hint { overflow: hidden; text-overflow: ellipsis; }
-.legend { display: flex; gap: 10px 14px; flex-wrap: wrap; padding: 6px 10px 8px; background: var(--guide-deep); border-top: 2px solid var(--guide); }
+.legend { display: flex; gap: 10px; flex: 1; min-width: 0; overflow: hidden; justify-content: space-between; }
+.legend .badge { font-size: 15px; gap: 3px; }
+.legend .badge i { letter-spacing: 0; }
+.help {
+  display: inline-grid; place-items: center; width: 20px; height: 20px; margin-left: 4px; vertical-align: 2px;
+  border-radius: 50%; background: var(--guide); color: var(--hi); font-size: 17px; cursor: help;
+}
 
 /* ---------- dialogs ---------- */
 dialog {
@@ -258,7 +296,13 @@ dialog textarea { min-height: 80px; font: 12px/1.4 ui-monospace, Consolas, monos
     position: sticky; top: 0; z-index: 6; flex-direction: column; gap: 0; padding: 0; border-radius: 0;
     background: #000; box-shadow: none;
   }
-  .bezel { padding: 0; border-radius: 0; background: #000; box-shadow: none; }
+  .bezel { padding: 0; border-radius: 0; background: #000; box-shadow: none; gap: 0; }
+  /* phone: one slim line with the essentials, so the pinned player stays small */
+  .vfd { flex: none; min-height: 0; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 0 4px; padding: 3px 6px; border-radius: 0; }
+  .vfd-main, .vfd-next, .vfd-clock, .vfd-cell:nth-child(3), .vfd-cell:nth-child(4), .vfd-cell:nth-child(6), .vfd-cell:nth-child(7) { display: none; }
+  .vfd-cell { flex-direction: row; align-items: baseline; gap: 4px; padding: 0 4px; border: none; }
+  .vfd-k { font-size: 12px; }
+  .vfd-cell b { font-size: 17px; }
   .video-wrap { max-height: none; border-radius: 0; }
   .knobs { width: auto; flex-direction: row; justify-content: space-around; padding: 4px 6px; gap: 4px; border-radius: 0; background: var(--row1); box-shadow: none; }
   .knob-lbl, .dial, .grille { display: none; }
@@ -273,5 +317,4 @@ dialog textarea { min-height: 80px; font: 12px/1.4 ui-monospace, Consolas, monos
   .guide { margin: 12px 0 0; border-radius: 0; box-shadow: none; }
   .list { height: 62vh; flex: none; }
   .ch-num { width: 50px; font-size: 20px; }
-  .ticker-hint { display: none; }
 }
