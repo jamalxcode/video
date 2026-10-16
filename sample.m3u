@@ -1,0 +1,13 @@
+#EXTM3U
+#EXTINF:-1 tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Big_buck_bunny_poster_big.jpg/220px-Big_buck_bunny_poster_big.jpg" group-title="Test streams",Big Buck Bunny (HLS)
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+#EXTINF:-1 group-title="Test streams",Apple BipBop (HLS, fMP4)
+https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8
+#EXTINF:-1 group-title="Test streams",Akamai live test (HLS)
+https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8
+#EXTINF:-1 group-title="Test streams",Sintel (MP4)
+https://test-videos.co.uk/vids/sintel/mp4/h264/720/Sintel_720_10s_1MB.mp4
+#EXTINF:-1 group-title="Broken on purpose",Offline server
+https://offline.invalid/live/stream.m3u8
+#EXTINF:-1 group-title="Broken on purpose",Missing stream (404)
+https://test-streams.mux.dev/does-not-exist/index.m3u8
