@@ -150,6 +150,7 @@ const S = {
   ui: { currentId: null, search: '', group: '', country: '', status: 'all', sort: '', lastKey: '', volume: 1, muted: false },
   recent: [],           // recently watched channels, newest first (saved copies, so they work across playlists)
   cursor: -1,           // highlighted guide row for arrow-key / remote navigation
+  lit: new Map(),       // channel key -> when it was just confirmed good (for the light-up effect)
   current: null,
   loading: '',          // message shown in the list while a playlist downloads
 };
@@ -491,7 +492,7 @@ function inferFromHost(url) {
 const nextTestable = ch => orderedSources(ch).find(s => !isFresh(s) && !s.hdr && !T.queued.has(s.url));
 
 const PER_HOST = 2;
-const T = { queue: [], queued: new Set(), force: new Set(), hostActive: new Map(), active: 0, done: 0, total: 0, manual: false };
+const T = { queue: [], queued: new Set(), force: new Set(), hostActive: new Map(), activeUrls: new Set(), active: 0, done: 0, total: 0, manual: false };
 function queueTests(urls, { manual = false, force = false, front = false } = {}) {
   if (manual) { T.queue = []; T.queued.clear(); T.done = 0; T.total = T.active; T.manual = true; }
   const add = [];
@@ -531,6 +532,7 @@ function recordProbe(url, p) {
   const h = H(url);
   if (p.kind) h.kind = p.kind;
   h.probe = p;
+  if (p.status === 'ok') lightUp(S.byUrl.get(url));
   saveH(h);
   if (!p.inferred) noteHost(url, p);
   // This source is bad: test the channel's next backup source right away.
@@ -548,12 +550,15 @@ function pump() {
     if (inferred) { recordProbe(url, inferred); finishTest(url); continue; }
     const host = hostOf(url);
     T.active++;
+    T.activeUrls.add(url);
     T.hostActive.set(host, (T.hostActive.get(host) || 0) + 1);
+    scheduleRender(); // show "Checking" on that row
     probe(url)
       .catch(e => ({ at: Date.now(), status: 'dead', note: String(e.message || e) }))
       .then(p => recordProbe(url, p))
       .finally(() => {
         T.active--;
+        T.activeUrls.delete(url);
         T.hostActive.set(host, T.hostActive.get(host) - 1);
         finishTest(url);
         pump();
@@ -563,7 +568,19 @@ function pump() {
 function updateTestUi() {
   const busy = T.active > 0 || T.queue.length > 0;
   $('#testBtn').textContent = T.manual && busy ? 'Stop testing' : 'Test channels';
-  $('#testProgress').textContent = busy ? `Testing ${T.done}/${T.total}…` : '';
+  $('#testProgress').textContent = busy ? `Checking ${T.done}/${T.total}…` : '';
+  $('#scanBar').classList.toggle('on', busy);
+  scheduleRender();
+}
+// Rows are grey until a channel proves it streams well; then it lights up blue (briefly animated).
+function lightUp(ch) {
+  if (ch?.key) S.lit.set(ch.key, Date.now());
+}
+// What a row should say while the tester is busy with it.
+function testState(ch) {
+  if (ch.sources.some(s => T.activeUrls.has(s.url))) return 'checking';
+  if (ch.sources.some(s => T.queued.has(s.url))) return 'queued';
+  return '';
 }
 function testUrlsFor(channels) {
   const urls = [];
@@ -626,13 +643,23 @@ function renderList() {
     const active = S.current && S.current.key === ch.key;
     const cc = countryOf(ch);
     const more = (ch.sources.length > 1 ? ` · ${ch.sources.length} sources` : '') + (cc ? ` · ${countryFlag(cc)}` : '');
-    html += `<div class="ch${active ? ' active' : ''}${i === S.cursor ? ' cursor' : ''}${isBadCls(st.cls) ? ' dead' : ''}" id="ch-${i}" role="option" aria-selected="${i === S.cursor}" data-i="${i}" style="top:${i * ROW}px" title="${esc(ch.name + ' — ' + st.tip)}">
+    // Grey until proven good; blue once a test or a real play shows it streams well.
+    const good = st.cls === 'good';
+    const litAgo = good ? Date.now() - (S.lit.get(ch.key) || 0) : Infinity;
+    const lit = litAgo < 1200 ? ' lit' : '';
+    const ts = testState(ch);
+    const badge = ts === 'checking'
+      ? '<span class="badge checking"><i class="mini-spin" aria-hidden="true"></i>Checking…</span>'
+      : ts === 'queued' && st.cls === 'untested'
+        ? '<span class="badge queued"><i aria-hidden="true">···</i>Queued</span>'
+        : badgeHtml(st);
+    html += `<div class="ch${active ? ' active' : ''}${i === S.cursor ? ' cursor' : ''}${good ? '' : ' dead'}${ts ? ' ' + ts : ''}${lit}" id="ch-${i}" role="option" aria-selected="${i === S.cursor}" data-i="${i}" style="top:${i * ROW}px${lit ? `;--lit-delay:-${litAgo}ms` : ''}" title="${esc(ch.name + ' — ' + st.tip)}">
       <span class="ch-num">${chNum(ch)}</span>
       <div class="ch-body">
         <div class="logo">${ch.logo ? `<img src="${esc(ch.logo)}" loading="lazy" referrerpolicy="no-referrer" alt="" onerror="this.remove()">` : '▶'}</div>
         <div class="info">
           <div class="name">${esc(ch.name)}</div>
-          <div class="meta">${badgeHtml(st)}${tagsHtml(ch)}<span class="grp">${esc(groupLabel(ch) + more)}</span></div>
+          <div class="meta">${badge}${tagsHtml(ch)}<span class="grp">${esc(groupLabel(ch) + more)}</span></div>
         </div>
         <button class="star${fav ? ' on' : ''}" data-star="${i}" tabindex="-1" title="${fav ? 'Remove from' : 'Add to'} favorites" aria-label="${fav ? 'Remove from' : 'Add to'} favorites">${fav ? '★' : '☆'}</button>
       </div>
@@ -1079,7 +1106,7 @@ video.addEventListener('playing', () => {
   h.plays++;
   h.lastPlay = Date.now();
   if (ms > S.settings.slowStartSec * 1000) { h.slow++; h.lastResult = 'slow'; }
-  else { h.ok++; h.lastResult = 'ok'; }
+  else { h.ok++; h.lastResult = 'ok'; lightUp(s.ch); }
   s.recorded = true;
   saveH(h);
   // Warm up the connection to the next channel so switching feels instant.

@@ -338,3 +338,32 @@ dialog textarea { min-height: 80px; font: 12px/1.4 ui-monospace, Consolas, monos
 .ch.dead .logo img { filter: grayscale(1); opacity: .55; }
 .ch.dead .star:not(.on) { color: #6c6c78; }
 .ch.dead.cursor:not(.active) .ch-body { background: #4a4a56; }
+
+/* Every row starts grey; it turns guide blue once it has proven to stream well. */
+.ch.lit .ch-body, .ch.lit .ch-num { animation: lightup 1.2s ease-out both; animation-delay: var(--lit-delay, 0ms); }
+@keyframes lightup {
+  0%   { background-color: #3a3a45; box-shadow: inset 0 0 0 2px var(--good); }
+  60%  { box-shadow: inset 0 0 0 2px var(--good); }
+}
+/* While the tester works on a row */
+.badge.checking { color: var(--hi); }
+.badge.queued, .badge.queued i { color: #9a9ab0; }
+.mini-spin {
+  width: 11px; height: 11px; border-radius: 50%; display: inline-block; flex: none;
+  border: 2px solid rgba(255, 225, 77, .3); border-top-color: var(--hi); animation: spin .8s linear infinite;
+}
+.ch.checking .ch-num { animation: numpulse 1s ease-in-out infinite; }
+@keyframes numpulse { 50% { color: var(--hi); } }
+/* Scanning bar above the guide while channels are being checked */
+.scanbar { height: 3px; background: var(--guide-deep); position: relative; overflow: hidden; flex: none; }
+.scanbar.on::after {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 35%; left: -35%;
+  background: linear-gradient(90deg, transparent, var(--hi), transparent);
+  animation: scan 1.3s linear infinite;
+}
+@keyframes scan { to { left: 100%; } }
+@media (prefers-reduced-motion: reduce) {
+  .ch.lit .ch-body, .ch.lit .ch-num, .ch.checking .ch-num { animation: none; }
+  .scanbar.on::after { animation: none; left: 0; width: 100%; opacity: .6; }
+  .mini-spin { animation-duration: 2.4s; }
+}

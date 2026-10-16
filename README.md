@@ -9,6 +9,7 @@ A browser-based player for M3U / M3U8 IPTV playlists, styled like a 70s wood-pan
 - **Ready to watch**: on the first visit the full [iptv-org](https://github.com/iptv-org/iptv) list (about 11,000 public channels) loads automatically. If you remove it, it isn't added again.
 - **Load playlists** from a URL, an uploaded file, or pasted text, or quick-add any iptv-org country list. You can keep several playlists and switch between them.
 - **Plays** HLS (`.m3u8`) with hls.js, MPEG-TS/FLV with mpegts.js, and MP4/WebM with the browser's own player.
+- **Grey until proven good.** Every channel starts grey and lights up guide blue once a test or a real play shows it streams well. While channels are being checked, rows say *Checking…* or *Queued* and a scanning bar runs above the guide.
 - **Warnings before you click.** Every channel shows a badge:
   - 🟢 **Good**: tested fast, or it played fine for you last time
   - 🟡 **Slow / Buffers**: slow to respond, video downloads close to real-time speed, or it buffered a lot when you watched it
