@@ -1061,6 +1061,11 @@ async function selectPlaylist(id, parsed) {
   S.ui.group = '';
   saveUi();
   setChannels(!id ? [] : parsed || buildChannels((await DB.get('kv', 'pl:' + id)) || ''));
+  const meta = S.playlists.find(p => p.id === id);
+  if (meta && meta.count !== S.channels.length) { // e.g. counted before duplicates were merged
+    meta.count = S.channels.length;
+    DB.put('kv', S.playlists, 'playlists');
+  }
   renderPlaylists();
   $('#statusFilter').value = S.ui.status;
   $('#sortSel').value = S.ui.sort || '';
