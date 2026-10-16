@@ -373,7 +373,7 @@ function autoTestVisible() {
    ========================================================================= */
 const ROW = 56;
 // Fallback for when the list has no layout yet (hidden tab, first paint).
-const listHeight = () => $('#list').clientHeight || window.innerHeight;
+const listHeight = () => $('#list').clientHeight || window.innerHeight || 800;
 let renderPending = false;
 function scheduleRender() {
   if (renderPending) return;
