@@ -130,7 +130,7 @@ function preconnect(url) {
 /* =========================================================================
    State
    ========================================================================= */
-const DEFAULT_SETTINGS = { slowStartSec: 6, timeoutSec: 15, autoSkip: false, autoTest: true, concurrency: 6 };
+const DEFAULT_SETTINGS = { slowStartSec: 6, timeoutSec: 15, autoSkip: false, autoTest: true, concurrency: 6, fx: true };
 // Loaded automatically for first-time visitors (https://github.com/iptv-org/iptv).
 const IPTV_ORG = 'https://iptv-org.github.io/iptv/';
 const DEFAULT_PLAYLIST = { name: 'iptv-org (all channels)', url: IPTV_ORG + 'index.m3u' };
@@ -141,6 +141,7 @@ const S = {
   channels: [],         // channels of the selected playlist: { key, name, logo, group, sources: [{ url, name, hdr }] }
   byKey: new Map(),     // channel key -> channel
   byUrl: new Map(),     // stream URL -> channel
+  numByKey: new Map(),  // channel key -> channel number (position in the playlist, from 1)
   filtered: [],         // what the list currently shows
   health: new Map(),    // stream URL -> health record
   hosts: new Map(),     // server host -> { ok, blocked, dead } from recent tests
@@ -597,14 +598,22 @@ function renderList() {
     const active = S.current && S.current.key === ch.key;
     const more = ch.sources.length > 1 ? ` · ${ch.sources.length} sources` : '';
     html += `<div class="ch${active ? ' active' : ''}" data-i="${i}" style="top:${i * ROW}px" title="${esc(st.tip)}">
-      <div class="logo">${ch.logo ? `<img src="${esc(ch.logo)}" loading="lazy" referrerpolicy="no-referrer" alt="" onerror="this.remove()">` : '▶'}</div>
-      <div class="info"><div class="name">${esc(ch.name)}</div><div class="grp">${esc(groupLabel(ch) + more)}</div></div>
-      <span class="badge ${st.cls}"><i></i>${esc(st.label)}</span>
-      <button class="star${fav ? ' on' : ''}" data-star="${i}" title="${fav ? 'Remove from' : 'Add to'} favorites">${fav ? '★' : '☆'}</button>
+      <span class="ch-num">${chNum(ch)}</span>
+      <div class="ch-body">
+        <div class="logo">${ch.logo ? `<img src="${esc(ch.logo)}" loading="lazy" referrerpolicy="no-referrer" alt="" onerror="this.remove()">` : '▶'}</div>
+        <div class="info"><div class="name">${esc(ch.name)}</div><div class="grp">${esc(groupLabel(ch) + more)}</div></div>
+        ${badgeHtml(st)}
+        <button class="star${fav ? ' on' : ''}" data-star="${i}" title="${fav ? 'Remove from' : 'Add to'} favorites" aria-label="${fav ? 'Remove from' : 'Add to'} favorites">${fav ? '★' : '☆'}</button>
+      </div>
     </div>`;
   }
   inner.innerHTML = html;
 }
+// Signal-strength bars stand in for the status dot (cable-guide look).
+const BARS = { good: '▮▮▮▮', warn: '▮▮▯▯', bad: '▯▯▯▯', blocked: '✕', untested: '····' };
+const badgeHtml = (st, fallback = '') =>
+  `<span class="badge ${st.cls}" aria-label="${esc(st.label || fallback || 'Untested')}"><i aria-hidden="true">${BARS[st.cls] || ''}</i>${esc(st.label || fallback)}</span>`;
+const chNum = ch => S.numByKey.get(ch.key) ?? '★';
 // A channel can sit in several groups, written "News;Sports" (iptv-org does this).
 const groupsOf = ch => ch.group.split(';').map(g => g.trim()).filter(Boolean);
 const groupLabel = ch => groupsOf(ch).join(', ');
@@ -670,6 +679,56 @@ function scrollToCurrent() {
 const video = $('#video');
 let hls = null, mpeg = null, engine = '', nativeFail = null;
 let playToken = 0, session = null, startTimer = null;
+
+/* The TV screen around the video: test pattern when idle, static while tuning,
+   the green channel number in the corner, and the channel dial. Purely visual. */
+const TV = (() => {
+  const canvas = $('#snow'), card = $('#testcard'), osd = $('#osd'), dial = $('#dial');
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const ctx = canvas.getContext('2d');
+  canvas.width = 160;
+  canvas.height = 90;
+  const img = ctx.createImageData(160, 90);
+  let raf = 0, last = 0, osdTimer;
+  function frame(t) {
+    if (t - last > 50) { // ~20 fps is plenty for static
+      last = t;
+      const d = img.data;
+      for (let p = 0; p < d.length; p += 4) { const v = Math.random() * 255 | 0; d[p] = d[p + 1] = d[p + 2] = v; d[p + 3] = 255; }
+      ctx.putImageData(img, 0, 0);
+    }
+    raf = reduceMotion ? 0 : requestAnimationFrame(frame);
+  }
+  function snow(on, dim = false) {
+    cancelAnimationFrame(raf);
+    raf = 0;
+    const show = on && S.settings.fx;
+    canvas.classList.toggle('hidden', !show);
+    canvas.classList.toggle('dim', dim);
+    if (show) { last = 0; frame(performance.now()); }
+  }
+  function osdShow(html, ms = 3000) {
+    osd.innerHTML = html;
+    osd.classList.add('on');
+    clearTimeout(osdTimer);
+    osdTimer = setTimeout(() => osd.classList.remove('on'), ms);
+  }
+  const osdChannel = ch => osdShow(`CH ${chNum(ch)}<small>${esc(ch.name)}</small>`);
+  return {
+    idle() { snow(false); card.classList.remove('hidden'); },
+    tune(ch) {
+      card.classList.add('hidden');
+      snow(true);
+      osdChannel(ch);
+      const n = typeof chNum(ch) === 'number' ? chNum(ch) : 0;
+      dial.style.transform = `rotate(${n * 30}deg)`;
+    },
+    picture(ch) { snow(false); card.classList.add('hidden'); if (ch) osdChannel(ch); },
+    noSignal() { card.classList.add('hidden'); snow(true, true); },
+    osdShow,
+    refreshFx() { document.body.classList.toggle('fx', S.settings.fx); if (!S.settings.fx) snow(false); },
+  };
+})();
 
 function teardown() {
   if (hls) { hls.destroy(); hls = null; }
@@ -745,7 +804,8 @@ function nextSource() {
   const token = ++playToken;
   Object.assign(s, { url: s.order[s.idx].url, t0: performance.now(), started: false, failed: false, recorded: false, stalls: 0, token });
   renderNow();
-  showOverlay('<div class="spinner"></div>' + (s.idx ? `Trying backup source ${s.idx + 1} of ${s.order.length}…` : 'Loading…'));
+  TV.tune(s.ch);
+  showOverlay('<div class="spinner"></div>' + (s.idx ? `Trying backup source ${s.idx + 1} of ${s.order.length}…` : 'Tuning…'));
   clearTimeout(startTimer);
   startTimer = setTimeout(() => onTimeout(token), S.settings.timeoutSec * 1000);
   const url = effectiveUrl(s.url);
@@ -840,6 +900,7 @@ function onPlayFail(msg) {
   clearTimeout(startTimer);
   recordFail(s, msg, !s.started);
   teardown();
+  TV.noSignal();
   if (!s.started && nextSource()) return; // a backup source takes over
   if (S.settings.autoSkip && !s.started) {
     showOverlay(`✖ ${esc(msg)}<div class="muted">Skipping to the next working channel…</div>`);
@@ -847,7 +908,7 @@ function onPlayFail(msg) {
     return;
   }
   const tried = s.order.length > 1 ? ` (tried all ${s.order.length} sources)` : '';
-  showOverlay(`<b>✖ Couldn’t play this channel${tried}</b><div class="muted">${esc(msg)}</div>`,
+  showOverlay(`<b>NO SIGNAL</b><div>Couldn’t play this channel${tried}</div><div class="muted">${esc(msg)}</div>`,
     [['next', 'Next channel'], ['retry', 'Retry'], ['copy', 'Copy link for VLC']]);
 }
 
@@ -868,6 +929,7 @@ video.addEventListener('playing', () => {
   if (!s || s.token !== playToken) return;
   hideOverlay();
   if (s.started) return;
+  TV.picture(s.ch);
   s.started = true;
   clearTimeout(startTimer);
   const ms = performance.now() - s.t0;
@@ -944,13 +1006,14 @@ function renderNow() {
   const st = channelStatus(ch);
   const h = S.health.get(src.url);
   $('#nowName').textContent = ch.name;
-  $('#nowMeta').innerHTML = `${esc(groupLabel(ch))} · <span class="badge ${st.cls}"><i></i>${esc(st.label || 'Untested')}</span>`;
+  $('#nowMeta').innerHTML = `CH ${chNum(ch)} · ${esc(groupLabel(ch))} · ${badgeHtml(st, 'Untested')}`;
   const logo = $('#nowLogo');
   logo.classList.toggle('hidden', !ch.logo);
   if (ch.logo) { logo.src = ch.logo; logo.onerror = () => logo.classList.add('hidden'); }
   const fav = S.favs.has(ch.key);
-  $('#favBtn').textContent = fav ? '★ Favorite' : '☆ Favorite';
+  $('#favBtn b').textContent = fav ? '★' : '☆';
   $('#favBtn').classList.toggle('on', fav);
+  $('#favBtn').setAttribute('aria-pressed', fav);
   for (const b of document.querySelectorAll('.rate [data-rate]')) {
     b.classList.toggle('on', !!b.dataset.rate && b.dataset.rate === (h?.rating || ''));
   }
@@ -1027,6 +1090,7 @@ function renderPlaylists() {
 function setChannels(chs) {
   S.channels = chs;
   S.byKey = new Map(chs.map(c => [c.key, c]));
+  S.numByKey = new Map(chs.map((c, i) => [c.key, i + 1]));
   S.byUrl = new Map();
   for (const f of S.favs.values()) for (const s of f.sources || []) S.byUrl.set(s.url, S.byKey.get(f.key) || f);
   for (const c of chs) for (const s of c.sources) S.byUrl.set(s.url, c);
@@ -1196,6 +1260,7 @@ function openSettings() {
   $('#sAutoSkip').checked = s.autoSkip;
   $('#sAutoTest').checked = s.autoTest;
   $('#sConc').value = s.concurrency;
+  $('#sFx').checked = s.fx;
   $('#setDlg').showModal();
 }
 const clamp = (v, lo, hi, d) => { v = Math.round(+v); return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d; };
@@ -1296,8 +1361,10 @@ function wire() {
       autoSkip: $('#sAutoSkip').checked,
       autoTest: $('#sAutoTest').checked,
       concurrency: clamp($('#sConc').value, 1, 16, d.concurrency),
+      fx: $('#sFx').checked,
     };
     DB.put('kv', S.settings, 'settings');
+    TV.refreshFx();
     toast('Settings saved');
   });
   $('#exportBtn').addEventListener('click', exportData);
@@ -1308,6 +1375,7 @@ function wire() {
   $('#favBtn').addEventListener('click', () => S.current && toggleFav(S.current));
   $('#prevBtn').addEventListener('click', () => step(-1));
   $('#nextBtn').addEventListener('click', () => step(1));
+  $('#dial').addEventListener('click', () => step(1));
   $('#sourceSel').addEventListener('change', e => S.current && playChannel(S.current, e.target.value));
   for (const b of document.querySelectorAll('[data-rate]')) b.addEventListener('click', () => setRating(b.dataset.rate));
   $('#copyBtn').addEventListener('click', copyLink);
@@ -1325,11 +1393,26 @@ function wire() {
   });
 
   document.addEventListener('keydown', e => {
-    if (e.target.closest('input, textarea, select, dialog') || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target.closest?.('input, textarea, select, dialog') || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (/^[0-9]$/.test(e.key)) return typeChannelDigit(e.key);
     if (e.key === 'ArrowDown' || e.key === 'n') { e.preventDefault(); step(1); }
     else if (e.key === 'ArrowUp' || e.key === 'p') { e.preventDefault(); step(-1); }
     else if (e.key === 'f' && S.current) toggleFav(S.current);
   });
+}
+// Like a remote: type a channel number, it tunes in after a short pause.
+let numBuf = '', numTimer;
+function typeChannelDigit(d) {
+  numBuf = (numBuf + d).slice(-5);
+  TV.osdShow(`CH ${numBuf}_`, 1500);
+  clearTimeout(numTimer);
+  numTimer = setTimeout(() => {
+    const n = +numBuf;
+    numBuf = '';
+    const ch = S.channels[n - 1];
+    if (ch) playChannel(ch);
+    else toast(`There’s no channel ${n}`);
+  }, 1200);
 }
 function copyLink() {
   const url = currentSourceUrl();
@@ -1352,6 +1435,8 @@ async function init() {
   }
   for (const f of favs || []) S.favs.set(f.key, f);
   $('#search').value = S.ui.search;
+  TV.refreshFx();
+  TV.idle();
 
   const startId = S.playlists.some(p => p.id === S.ui.currentId) ? S.ui.currentId : S.playlists[0]?.id || null;
   await selectPlaylist(startId);

@@ -3,79 +3,63 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>M3U Player</title>
-<link rel="stylesheet" href="style.css?v=5">
+<meta name="theme-color" content="#14106b">
+<title>M3U TV</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=8">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://iptv-org.github.io" crossorigin>
 </head>
-<body>
+<body class="fx">
 <header class="topbar">
-  <div class="brand">▶ M3U Player</div>
-  <select id="playlistSelect" title="Your saved playlists"></select>
+  <div class="brand"><span class="brand-dot" aria-hidden="true"></span>M3U TV</div>
+  <select id="playlistSelect" title="Your saved playlists" aria-label="Playlist"></select>
   <button id="addPlaylistBtn" class="primary">+ Playlist</button>
-  <button id="refreshPlaylistBtn" title="Reload playlist from its URL">⟳</button>
-  <button id="deletePlaylistBtn" title="Remove this playlist">🗑</button>
+  <button id="refreshPlaylistBtn" title="Reload playlist from its URL" aria-label="Reload playlist">⟳</button>
+  <button id="deletePlaylistBtn" title="Remove this playlist" aria-label="Remove playlist">🗑</button>
   <div class="spacer"></div>
-  <button id="settingsBtn" title="Settings & backup">⚙</button>
+  <button id="settingsBtn" title="Settings & backup" aria-label="Settings">⚙</button>
 </header>
 
 <main class="layout">
-  <aside class="sidebar">
-    <div class="filters">
-      <input id="search" type="search" placeholder="Search channels…" autocomplete="off">
-      <div class="frow">
-        <select id="groupFilter"></select>
-        <select id="statusFilter">
-          <option value="all">All channels</option>
-          <option value="fav">★ Favorites</option>
-          <option value="good">Working only</option>
-          <option value="hideBad">Hide broken</option>
-          <option value="untested">Untested</option>
-        </select>
-      </div>
-      <div class="frow">
-        <select id="sortSel" title="Sort order">
-          <option value="">Playlist order</option>
-          <option value="best">Best first</option>
-          <option value="name">Name A–Z</option>
-        </select>
-        <span id="count" class="muted"></span>
-      </div>
-      <div class="frow">
-        <button id="testBtn" title="Check the channels in the current list">Test channels</button>
-        <span id="testProgress" class="muted"></span>
-      </div>
-    </div>
-    <div id="list" class="list"><div id="listInner"></div></div>
-    <div class="legend">
-      <span class="badge good"><i></i>Good</span>
-      <span class="badge warn"><i></i>Slow / buffers</span>
-      <span class="badge bad"><i></i>Broken</span>
-      <span class="badge blocked"><i></i>Blocked in browser</span>
-      <span class="badge untested"><i></i>Untested</span>
-    </div>
-  </aside>
-
   <section class="stage">
-    <div class="video-wrap">
-      <video id="video" controls playsinline></video>
-      <div id="overlay" class="overlay hidden"></div>
+    <div class="cabinet">
+      <div class="bezel">
+        <div class="video-wrap">
+          <video id="video" controls playsinline></video>
+          <div id="testcard" class="testcard" aria-hidden="true">
+            <div class="bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="bars2"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="bars3"><i></i><i></i><i></i><i></i></div>
+            <div class="testcard-label">M3U TV<small>pick a channel</small></div>
+          </div>
+          <canvas id="snow" class="snow hidden" aria-hidden="true"></canvas>
+          <div id="osd" class="osd" aria-live="polite"></div>
+          <div id="overlay" class="overlay hidden"></div>
+        </div>
+      </div>
+      <div class="knobs">
+        <span class="knob-lbl" aria-hidden="true">CHANNEL</span>
+        <div id="dial" class="dial" title="Next channel" aria-hidden="true"></div>
+        <button id="prevBtn" class="knob" title="Previous channel (↑)" aria-label="Previous channel"><b>▲</b><small>PREV</small></button>
+        <button id="nextBtn" class="knob" title="Next channel (↓)" aria-label="Next channel"><b>▼</b><small>NEXT</small></button>
+        <button id="favBtn" class="knob" title="Favorite (F)" aria-label="Favorite"><b>☆</b><small>FAV</small></button>
+        <div class="grille" aria-hidden="true"></div>
+      </div>
     </div>
+
     <div class="now">
       <div class="now-logo"><img id="nowLogo" alt="" class="hidden"></div>
       <div class="now-text">
         <div id="nowName">Pick a channel</div>
         <div id="nowMeta" class="muted"></div>
-        <select id="sourceSel" class="hidden" title="This channel has several sources; pick one"></select>
-      </div>
-      <div class="now-actions">
-        <button id="prevBtn" title="Previous channel (↑)">⏮</button>
-        <button id="nextBtn" title="Next channel (↓)">⏭</button>
-        <button id="favBtn" title="Favorite (F)">☆ Favorite</button>
+        <select id="sourceSel" class="hidden" title="This channel has several sources; pick one" aria-label="Source"></select>
       </div>
     </div>
     <div class="rate">
-      <span class="muted">Your rating:</span>
+      <span class="rate-lbl">Your rating</span>
       <button data-rate="good">👍 Smooth</button>
       <button data-rate="buffers">⚠ Buffers</button>
       <button data-rate="broken">✖ Broken</button>
@@ -86,6 +70,43 @@
     </div>
     <div id="nowStats" class="stats muted"></div>
   </section>
+
+  <aside class="sidebar guide">
+    <div class="guide-head">
+      <span>TV GUIDE</span>
+      <span id="count" class="count"></span>
+    </div>
+    <div class="filters">
+      <input id="search" type="search" placeholder="Search channels…" autocomplete="off" aria-label="Search channels">
+      <div class="frow">
+        <select id="groupFilter" aria-label="Group"></select>
+        <select id="statusFilter" aria-label="Show">
+          <option value="all">All channels</option>
+          <option value="fav">★ Favorites</option>
+          <option value="good">Working only</option>
+          <option value="hideBad">Hide broken</option>
+          <option value="untested">Untested</option>
+        </select>
+      </div>
+      <div class="frow">
+        <select id="sortSel" title="Sort order" aria-label="Sort">
+          <option value="">Playlist order</option>
+          <option value="best">Best first</option>
+          <option value="name">Name A–Z</option>
+        </select>
+        <button id="testBtn" title="Check the channels in the current list">Test channels</button>
+      </div>
+    </div>
+    <div id="list" class="list"><div id="listInner"></div></div>
+    <div class="ticker"><span id="testProgress"></span><span class="ticker-hint">Type a channel number to jump · ↑↓ change channel · F favorite</span></div>
+    <div class="legend">
+      <span class="badge good"><i>▮▮▮▮</i>Good</span>
+      <span class="badge warn"><i>▮▮▯▯</i>Slow / buffers</span>
+      <span class="badge bad"><i>▯▯▯▯</i>Broken</span>
+      <span class="badge blocked"><i>✕</i>Blocked in browser</span>
+      <span class="badge untested"><i>····</i>Untested</span>
+    </div>
+  </aside>
 </main>
 
 <dialog id="addDlg">
@@ -121,6 +142,7 @@
     <input id="sTimeout" type="number" min="3" max="120">
     <label class="check"><input id="sAutoSkip" type="checkbox"> Skip to the next working channel when a stream fails or times out</label>
     <label class="check"><input id="sAutoTest" type="checkbox"> Test channels automatically as you scroll</label>
+    <label class="check"><input id="sFx" type="checkbox"> Retro screen effects (scanlines and static between channels)</label>
     <label for="sConc">Channels to test at the same time</label>
     <input id="sConc" type="number" min="1" max="16">
     <h3>Your data</h3>
@@ -139,6 +161,6 @@
 </dialog>
 
 <div id="toast" class="toast hidden"></div>
-<script src="app.js?v=6"></script>
+<script src="app.js?v=8"></script>
 </body>
 </html>

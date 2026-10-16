@@ -1,6 +1,6 @@
-# M3U Player
+# M3U TV
 
-A browser-based player for M3U / M3U8 IPTV playlists. It's a static site, so it can be hosted for free on GitHub Pages.
+A browser-based player for M3U / M3U8 IPTV playlists, styled like a 70s wood-panel TV with an 80s cable TV guide. It's a static site, so it can be hosted for free on GitHub Pages.
 
 ## Features
 
@@ -21,7 +21,8 @@ A browser-based player for M3U / M3U8 IPTV playlists. It's a static site, so it 
 - **Favorites** (★) work across all your playlists.
 - **Filters**: search, group, Working only, Hide broken, Untested.
 - **Auto-skip** (in Settings): jumps to the next working channel when one fails or times out.
-- **Keyboard**: ↑/↓ change channel, `F` toggles favorite.
+- **Keyboard**: ↑/↓ change channel, type a channel number to jump to it, `F` toggles favorite.
+- **Retro look**: wood-cabinet TV with a channel dial on desktop, a full-width player with a control strip on phones. Scanlines and static between channels can be switched off in Settings.
 
 ## Your data stays in your browser
 
