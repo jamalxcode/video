@@ -117,7 +117,8 @@ dialog h3 { margin: 4px 0 8px; }
 dialog h3 + p { margin-top: 0; }
 dialog label { display: block; margin: 12px 0 4px; color: var(--muted); }
 dialog label.check { display: flex; gap: 8px; align-items: flex-start; color: var(--text); }
-dialog input[type=text], dialog input[type=url], dialog input[type=number], dialog textarea { width: 100%; }
+dialog input[type=text], dialog input[type=url], dialog input[type=number], dialog textarea, dialog select { width: 100%; }
+dialog a { color: var(--accent); }
 dialog textarea { min-height: 80px; font: 12px/1.4 ui-monospace, Consolas, monospace; }
 .filebtn { display: inline-block; margin: 0; color: var(--text) !important; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
 .btns { display: flex; gap: 8px; flex-wrap: wrap; }

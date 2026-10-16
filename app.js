@@ -86,6 +86,9 @@ const isTimeout = e => e && (e.name === 'TimeoutError' || e.name === 'AbortError
    State
    ========================================================================= */
 const DEFAULT_SETTINGS = { slowStartSec: 6, timeoutSec: 15, autoSkip: false, autoTest: true, concurrency: 6 };
+// Loaded automatically for first-time visitors (https://github.com/iptv-org/iptv).
+const IPTV_ORG = 'https://iptv-org.github.io/iptv/';
+const DEFAULT_PLAYLIST = { name: 'iptv-org (all channels)', url: IPTV_ORG + 'index.m3u' };
 const S = {
   playlists: [],        // [{ id, name, url, count, addedAt }]
   channels: [],         // channels of the selected playlist
@@ -95,6 +98,7 @@ const S = {
   settings: { ...DEFAULT_SETTINGS },
   ui: { currentId: null, search: '', group: '', status: 'all', lastUrl: '' },
   current: null,
+  loading: '',          // message shown in the list while a playlist downloads
 };
 const saveUi = () => DB.put('kv', { ...S.ui }, 'ui');
 
@@ -388,7 +392,9 @@ function renderList() {
   const n = S.filtered.length;
   if (!n) {
     inner.style.height = 'auto';
-    inner.innerHTML = !S.playlists.length
+    inner.innerHTML = S.loading
+      ? `<div class="empty"><div class="spinner"></div>${esc(S.loading)}</div>`
+      : !S.playlists.length
       ? '<div class="empty">No playlist yet.<br><button class="primary" data-act="add">+ Add a playlist</button></div>'
       : S.ui.status === 'fav' && !S.favs.size
         ? '<div class="empty">No favorites yet.<br>Tap ☆ next to a channel to save it here.</div>'
@@ -406,13 +412,16 @@ function renderList() {
     const active = S.current && S.current.url === ch.url;
     html += `<div class="ch${active ? ' active' : ''}" data-i="${i}" style="top:${i * ROW}px" title="${esc(st.tip)}">
       <div class="logo">${ch.logo ? `<img src="${esc(ch.logo)}" loading="lazy" referrerpolicy="no-referrer" alt="" onerror="this.remove()">` : '▶'}</div>
-      <div class="info"><div class="name">${esc(ch.name)}</div><div class="grp">${esc(ch.group)}</div></div>
+      <div class="info"><div class="name">${esc(ch.name)}</div><div class="grp">${esc(groupLabel(ch))}</div></div>
       <span class="badge ${st.cls}"><i></i>${esc(st.label)}</span>
       <button class="star${fav ? ' on' : ''}" data-star="${i}" title="${fav ? 'Remove from' : 'Add to'} favorites">${fav ? '★' : '☆'}</button>
     </div>`;
   }
   inner.innerHTML = html;
 }
+// A channel can sit in several groups, written "News;Sports" (iptv-org does this).
+const groupsOf = ch => ch.group.split(';').map(g => g.trim()).filter(Boolean);
+const groupLabel = ch => groupsOf(ch).join(', ');
 function passStatus(ch, f) {
   if (f === 'all' || f === 'fav') return true;
   const cls = statusOf(ch.url).cls;
@@ -429,7 +438,7 @@ function sourceChannels() {
 function rebuildGroups() {
   const src = sourceChannels();
   const counts = new Map();
-  for (const c of src) counts.set(c.group, (counts.get(c.group) || 0) + 1);
+  for (const c of src) for (const g of groupsOf(c)) counts.set(g, (counts.get(g) || 0) + 1);
   const groups = [...counts.keys()].sort((a, b) => a.localeCompare(b));
   if (!counts.has(S.ui.group)) S.ui.group = '';
   $('#groupFilter').innerHTML = `<option value="">All groups (${groups.length})</option>` +
@@ -441,7 +450,7 @@ function applyFilters(keepScroll = false) {
   const f = S.ui.status;
   S.filtered = sourceChannels().filter(ch =>
     (!q || ch.name.toLowerCase().includes(q) || ch.group.toLowerCase().includes(q)) &&
-    (!g || ch.group === g) && passStatus(ch, f));
+    (!g || groupsOf(ch).includes(g)) && passStatus(ch, f));
   const total = sourceChannels().length;
   $('#count').textContent = S.filtered.length === total ? `${total} channels` : `${S.filtered.length} of ${total}`;
   if (!keepScroll) $('#list').scrollTop = 0;
@@ -692,7 +701,7 @@ function renderNow() {
   const st = statusOf(ch.url);
   const h = S.health.get(ch.url);
   $('#nowName').textContent = ch.name;
-  $('#nowMeta').innerHTML = `${esc(ch.group)} · <span class="badge ${st.cls}"><i></i>${esc(st.label || 'Untested')}</span>`;
+  $('#nowMeta').innerHTML = `${esc(groupLabel(ch))} ·<span class="badge ${st.cls}"><i></i>${esc(st.label || 'Untested')}</span>`;
   const logo = $('#nowLogo');
   logo.classList.toggle('hidden', !ch.logo);
   if (ch.logo) { logo.src = ch.logo; logo.onerror = () => logo.classList.add('hidden'); }
@@ -868,6 +877,7 @@ function openAddDialog() {
   $('#addForm').reset();
   $('#addErr').textContent = '';
   $('#addDlg').showModal();
+  loadIptvOrgChoices();
 }
 function openSettings() {
   const s = S.settings;
@@ -942,6 +952,13 @@ function wire() {
     }
   });
 
+  $('#plPreset').addEventListener('change', e => {
+    const opt = e.target.selectedOptions[0];
+    if (!opt.value) return;
+    $('#plUrl').value = opt.value;
+    $('#plName').value = 'iptv-org: ' + opt.textContent.trim();
+  });
+
   $('#settingsBtn').addEventListener('click', openSettings);
   $('#setForm').addEventListener('submit', e => {
     if (e.submitter?.value !== 'save') return;
@@ -1013,9 +1030,40 @@ async function init() {
   // Shortcut: ?m3u=<playlist url> adds that playlist (once).
   const qp = new URLSearchParams(location.search).get('m3u');
   if (qp && !S.playlists.some(p => p.url === qp)) {
-    addPlaylist({ url: qp }).catch(e => toast(e.message));
-  } else if (!S.playlists.length) {
-    openAddDialog();
+    loadWithSpinner({ url: qp });
+  } else if (!S.playlists.length && !S.ui.seeded) {
+    // First visit: preload the iptv-org list. Only once, so removing it sticks.
+    S.ui.seeded = true;
+    saveUi();
+    loadWithSpinner(DEFAULT_PLAYLIST);
+  }
+}
+async function loadWithSpinner(pl) {
+  S.loading = `Loading ${pl.name || 'playlist'}…`;
+  renderList();
+  try {
+    await addPlaylist(pl);
+  } catch (e) {
+    toast(e.message);
+  } finally {
+    S.loading = '';
+    renderList();
+  }
+}
+
+/* Quick-pick of iptv-org lists in the Add dialog (all channels, or one country). */
+let countriesLoaded = false;
+async function loadIptvOrgChoices() {
+  if (countriesLoaded) return;
+  countriesLoaded = true;
+  try {
+    const list = await (await fetch(IPTV_ORG.replace('/iptv/', '/api/') + 'countries.json')).json();
+    list.sort((a, b) => a.name.localeCompare(b.name));
+    $('#plPreset').insertAdjacentHTML('beforeend', '<optgroup label="By country">' +
+      list.map(c => `<option value="${IPTV_ORG}countries/${esc(c.code.toLowerCase())}.m3u">${esc(c.flag || '')} ${esc(c.name)}</option>`).join('') +
+      '</optgroup>');
+  } catch {
+    countriesLoaded = false; // try again next time the dialog opens
   }
 }
 init();

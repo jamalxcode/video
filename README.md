@@ -4,7 +4,8 @@ A browser-based player for M3U / M3U8 IPTV playlists. It's a static site, so it 
 
 ## Features
 
-- **Load playlists** from a URL, an uploaded file, or pasted text. You can keep several playlists and switch between them.
+- **Ready to watch**: on the first visit the full [iptv-org](https://github.com/iptv-org/iptv) list (about 11,000 public channels) loads automatically. If you remove it, it isn't added again.
+- **Load playlists** from a URL, an uploaded file, or pasted text, or quick-add any iptv-org country list. You can keep several playlists and switch between them.
 - **Plays** HLS (`.m3u8`) with hls.js, MPEG-TS/FLV with mpegts.js, and MP4/WebM with the browser's own player.
 - **Warnings before you click.** Every channel shows a badge:
   - 🟢 **Good**: tested fast, or it played fine for you last time

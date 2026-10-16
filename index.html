@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>M3U Player</title>
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.min.js"></script>
 </head>
@@ -84,6 +84,11 @@
 <dialog id="addDlg">
   <form method="dialog" id="addForm">
     <h3>Add playlist</h3>
+    <label for="plPreset">Quick add from <a href="https://github.com/iptv-org/iptv" target="_blank" rel="noopener">iptv-org</a></label>
+    <select id="plPreset">
+      <option value="">Choose a list…</option>
+      <option value="https://iptv-org.github.io/iptv/index.m3u">🌐 All channels</option>
+    </select>
     <label for="plName">Name (optional)</label>
     <input id="plName" type="text" placeholder="My channels">
     <label for="plUrl">Playlist URL</label>
@@ -127,6 +132,6 @@
 </dialog>
 
 <div id="toast" class="toast hidden"></div>
-<script src="app.js?v=3"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>
