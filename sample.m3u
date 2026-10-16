@@ -11,3 +11,7 @@ https://test-videos.co.uk/vids/sintel/mp4/h264/720/Sintel_720_10s_1MB.mp4
 https://offline.invalid/live/stream.m3u8
 #EXTINF:-1 group-title="Broken on purpose",Missing stream (404)
 https://test-streams.mux.dev/does-not-exist/index.m3u8
+#EXTINF:-1 tvg-id="FailoverDemo.test@SD" group-title="Backup sources",Failover demo (480p)
+https://offline.invalid/failover/index.m3u8
+#EXTINF:-1 tvg-id="FailoverDemo.test@HD" group-title="Backup sources",Failover demo HD (720p)
+https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8

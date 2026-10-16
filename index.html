@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>M3U Player</title>
-<link rel="stylesheet" href="style.css?v=4">
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.min.js"></script>
+<link rel="stylesheet" href="style.css?v=5">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://iptv-org.github.io" crossorigin>
 </head>
 <body>
 <header class="topbar">
@@ -34,10 +34,16 @@
         </select>
       </div>
       <div class="frow">
-        <button id="testBtn" title="Check every channel in the current list">Test channels</button>
-        <span id="testProgress" class="muted"></span>
-        <span class="spacer"></span>
+        <select id="sortSel" title="Sort order">
+          <option value="">Playlist order</option>
+          <option value="best">Best first</option>
+          <option value="name">Name A–Z</option>
+        </select>
         <span id="count" class="muted"></span>
+      </div>
+      <div class="frow">
+        <button id="testBtn" title="Check the channels in the current list">Test channels</button>
+        <span id="testProgress" class="muted"></span>
       </div>
     </div>
     <div id="list" class="list"><div id="listInner"></div></div>
@@ -60,6 +66,7 @@
       <div class="now-text">
         <div id="nowName">Pick a channel</div>
         <div id="nowMeta" class="muted"></div>
+        <select id="sourceSel" class="hidden" title="This channel has several sources; pick one"></select>
       </div>
       <div class="now-actions">
         <button id="prevBtn" title="Previous channel (↑)">⏮</button>
@@ -132,6 +139,6 @@
 </dialog>
 
 <div id="toast" class="toast hidden"></div>
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

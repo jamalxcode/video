@@ -139,3 +139,4 @@ dialog textarea { min-height: 80px; font: 12px/1.4 ui-monospace, Consolas, monos
   .video-wrap { max-height: none; position: sticky; top: 0; z-index: 2; }
   .brand { display: none; }
 }
+#sourceSel { margin-top: 6px; max-width: 100%; }

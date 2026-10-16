@@ -12,7 +12,10 @@ A browser-based player for M3U / M3U8 IPTV playlists. It's a static site, so it 
   - 🟡 **Slow / Buffers**: slow to respond, video downloads close to real-time speed, or it buffered a lot when you watched it
   - 🔴 **Broken**: offline, missing, or failed when you tried it
   - ⭕ **Blocked**: the server doesn't allow web players (CORS or HTTP-only), so it usually won't work in any browser
-- **Testing**: channels are tested automatically as you scroll (you can turn this off). *Test channels* checks the whole current list or group.
+- **Backup sources**: when a playlist lists the same channel more than once (different qualities or sources), it becomes one channel. The best source plays first, and if it fails or hangs the next one takes over automatically. You can also pick a source by hand.
+- **Testing**: channels are tested automatically as you scroll (you can turn this off). *Test channels* checks the whole current list or group. Tests are light: each reads only a small sample of video, runs at most 2 at a time per server, and skips servers already known to block browsers. Results stay valid for 6 hours.
+- **Sort**: playlist order, best first, or name.
+- **Always current**: playlists added from a URL are quietly re-downloaded once a day.
 - **Learns from watching**: start time, failures and buffering are recorded every time you play a channel.
 - **Your own ratings**: 👍 Smooth / ⚠ Buffers / ✖ Broken. Your rating always beats test results.
 - **Favorites** (★) work across all your playlists.
