@@ -1,6 +1,6 @@
 # M3U TV
 
-Live at **https://video.sala.company**
+Live at **https://video.sala.company** · part of [Sala Company](https://go.sala.company), free apps that run in your browser
 
 A browser-based player for M3U / M3U8 IPTV playlists, styled like a 70s wood-panel TV with an 80s cable TV guide. It's a static site, so it can be hosted for free on GitHub Pages.
 
