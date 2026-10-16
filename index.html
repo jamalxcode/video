@@ -5,16 +5,19 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#14106b">
 <title>video.sala.company</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" type="image/png" sizes="48x48" href="favicon-48.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=19">
+<link rel="stylesheet" href="style.css?v=20">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://iptv-org.github.io" crossorigin>
 </head>
 <body class="fx">
 <header class="topbar">
-  <div class="brand"><span class="brand-dot" aria-hidden="true"></span><span class="brand-name">video<span class="brand-dom">.sala.company</span></span></div>
+  <div class="brand"><img class="brand-icon" src="favicon.svg" width="30" height="30" alt="" aria-hidden="true"><span class="brand-name">video<span class="brand-dom">.sala.company</span></span></div>
   <select id="playlistSelect" title="Your saved playlists" aria-label="Playlist"></select>
   <button id="addPlaylistBtn" class="primary">+ Playlist</button>
   <button id="refreshPlaylistBtn" title="Reload playlist from its URL" aria-label="Reload playlist">⟳</button>
@@ -178,6 +181,6 @@
 </dialog>
 
 <div id="toast" class="toast hidden"></div>
-<script src="app.js?v=18"></script>
+<script src="app.js?v=20"></script>
 </body>
 </html>

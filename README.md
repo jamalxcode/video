@@ -1,4 +1,4 @@
-# M3U TV
+# video.sala.company
 
 Live at **https://video.sala.company** · part of [Sala Company](https://go.sala.company), free apps that run in your browser
 
