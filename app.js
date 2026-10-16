@@ -357,7 +357,7 @@ function autoTestVisible() {
   if (!S.settings.autoTest) return;
   const list = $('#list');
   const start = Math.floor(list.scrollTop / ROW);
-  const end = Math.min(S.filtered.length, Math.ceil((list.scrollTop + list.clientHeight) / ROW));
+  const end = Math.min(S.filtered.length, Math.ceil((list.scrollTop + listHeight()) / ROW));
   const stale = Date.now() - 6 * 3600e3;
   const urls = [];
   for (let i = start; i < end; i++) {
@@ -372,6 +372,8 @@ function autoTestVisible() {
    Channel list (virtualized — handles playlists with tens of thousands of entries)
    ========================================================================= */
 const ROW = 56;
+// Fallback for when the list has no layout yet (hidden tab, first paint).
+const listHeight = () => $('#list').clientHeight || window.innerHeight;
 let renderPending = false;
 function scheduleRender() {
   if (renderPending) return;
@@ -395,7 +397,7 @@ function renderList() {
   }
   inner.style.height = n * ROW + 'px';
   const start = Math.max(0, Math.floor(list.scrollTop / ROW) - 6);
-  const end = Math.min(n, Math.ceil((list.scrollTop + list.clientHeight) / ROW) + 6);
+  const end = Math.min(n, Math.ceil((list.scrollTop + listHeight()) / ROW) + 6);
   let html = '';
   for (let i = start; i < end; i++) {
     const ch = S.filtered[i];
@@ -453,8 +455,8 @@ function scrollToCurrent() {
   if (i < 0) return;
   const list = $('#list');
   const y = i * ROW;
-  if (y < list.scrollTop || y + ROW > list.scrollTop + list.clientHeight) {
-    list.scrollTop = y - list.clientHeight / 2 + ROW / 2;
+  if (y < list.scrollTop || y + ROW > list.scrollTop + listHeight()) {
+    list.scrollTop = y - listHeight() / 2 + ROW / 2;
   }
 }
 
