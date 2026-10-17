@@ -929,9 +929,7 @@ const TV = (() => {
 /* VCR-style display under the picture: what's on, how well it's playing, what's next. */
 const VFD = (() => {
   const el = id => document.getElementById(id);
-  const box = $('#vfd');
-  const narrow = matchMedia('(max-width: 820px)'); // same breakpoint as the phone layout
-  const STATE = {
+  const box = $('#vfd');  const STATE = {
     standby: ['STANDBY', ''], tuning: ['TUNING…', 'lvl-warn'], live: ['● LIVE', 'lvl-good'], sleep: ['☾ SLEEPING', 'lvl-warn'],
     buffering: ['BUFFERING', 'lvl-warn'], nosignal: ['NO SIGNAL', 'lvl-bad'],
   };
@@ -949,9 +947,17 @@ const VFD = (() => {
   }
   function set(id, text, cls = '') {
     const n = el(id);
-    if (n.textContent !== text) n.textContent = text;
+    if (n.textContent !== text || n._html) { n.textContent = text; n._html = null; }
     n.className = cls;
   }
+  // Same, for values with drawn meters (only rewritten when they actually change).
+  function setHtml(id, html, cls = '') {
+    const n = el(id);
+    if (n._html !== html) { n.innerHTML = html; n._html = html; }
+    n.className = cls;
+  }
+  // 8-segment buffer meter drawn as small blocks: one segment per 4 seconds loaded ahead.
+  const bufMeter = full => `<i class="bufm" aria-hidden="true">${Array.from({ length: 8 }, (_, i) => `<b${i < full ? '' : ' class="off"'}></b>`).join('')}</i>`;
   function update() {
     const ch = S.current;
     const s = session && ch && session.ch.key === ch.key ? session : null;
@@ -962,8 +968,8 @@ const VFD = (() => {
     set('vfdState', stateText, stateCls);
     if (ch) {
       const st = channelStatus(ch);
-      set('vfdSig', `${BARS[st.cls]} ${(st.label || 'UNTESTED').toUpperCase()}`, 'lvl-' + st.cls);
-    } else set('vfdSig', '····');
+      setHtml('vfdSig', `${sigHtml(st.cls)} ${esc((st.label || 'UNTESTED').toUpperCase())}`, 'lvl-' + st.cls);
+    } else setHtml('vfdSig', sigHtml('untested'));
     // Picture: resolution, plus bitrate when the player knows it.
     let pic = '—';
     if (s?.started && video.videoHeight) {
@@ -974,12 +980,11 @@ const VFD = (() => {
     }
     set('vfdPic', pic);
     // Buffer meter: 32 seconds full scale; 8 blocks on desktop, 4 on a phone.
-    const blocks = narrow.matches ? 4 : 8;
     if (s?.started) {
       const sec = bufferedAhead();
-      const full = Math.min(blocks, Math.round(sec / (32 / blocks)));
-      set('vfdBuf', `${'▮'.repeat(full)}${'▯'.repeat(blocks - full)} ${Math.round(sec)}s`, sec < 3 ? 'lvl-bad' : sec < 8 ? 'lvl-warn' : 'lvl-good');
-    } else set('vfdBuf', '▯'.repeat(blocks));
+      const full = Math.min(8, Math.round(sec / 4));
+      setHtml('vfdBuf', `${bufMeter(full)} ${Math.round(sec)}s`, sec < 3 ? 'lvl-bad' : sec < 8 ? 'lvl-warn' : 'lvl-good');
+    } else setHtml('vfdBuf', bufMeter(0));
     set('vfdTime', s?.liveAt ? since(Date.now() - s.liveAt) : '--:--');
     const kind = { hls: 'HLS', mpegts: 'TS', native: 'DIRECT' }[engine] || '';
     set('vfdSrc', s ? `${s.idx + 1}/${s.order.length}${kind ? ' · ' + kind : ''}` : ch ? `${ch.sources.length} AVAIL` : '—');
@@ -988,7 +993,7 @@ const VFD = (() => {
     const next = S.filtered[(i + 1) % Math.max(S.filtered.length, 1)];
     if (next && next !== ch) {
       const st = channelStatus(next);
-      set('vfdNext', `${chNum(next)} ${next.name.toUpperCase()} ${BARS[st.cls]}`, 'lvl-' + st.cls);
+      setHtml('vfdNext', `${chNum(next)} ${esc(next.name.toUpperCase())} ${sigHtml(st.cls)}`, 'lvl-' + st.cls);
     } else set('vfdNext', '—');
     const clock = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toUpperCase();
     set('vfdClock', Sleep.active() ? `${clock} · ☾ ${Sleep.left()}` : clock, Sleep.active() ? 'lvl-warn' : '');
