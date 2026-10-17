@@ -404,3 +404,24 @@ body, button, select, input, textarea { font-family: 'Twemoji Country Flags', sy
 .flag { margin-right: .35em; font-size: .9em; vertical-align: 1px; }
 /* sort sits beside the search box now */
 #sortSel.sort { flex: 0 1 auto; width: auto; min-width: 0; max-width: 34%; }
+
+/* ---------- compact guide rows (more channels on screen, same readability) ---------- */
+.ch { height: 58px; }
+.ch-num { width: 50px; font-size: 20px; }
+.ch-body { gap: 8px; padding: 0 2px 0 8px; }
+.logo { width: 32px; height: 32px; }
+.name { font-size: 19px; line-height: .92; }
+.meta { margin-top: 2px; gap: 6px; }
+.grp { font-size: 15px; }
+.badge { font-size: 15px; gap: 4px; }
+.star { font-size: 18px; padding: 2px 6px; }
+/* drawn signal meter: 4 rising bars, unlit ones dimmed */
+.sig { display: inline-flex; align-items: flex-end; gap: 2px; height: 11px; flex: none; font-style: normal; }
+.sig b { width: 3px; border-radius: 1px; background: currentColor; }
+.sig b:nth-child(1) { height: 4px; } .sig b:nth-child(2) { height: 6px; }
+.sig b:nth-child(3) { height: 8px; } .sig b:nth-child(4) { height: 11px; }
+.sig b.off { opacity: .28; }
+.sig-x { height: auto; font: 12px/1 system-ui, sans-serif; }
+.legend .sig { height: 9px; } .legend .sig b:nth-child(4) { height: 9px; } .legend .sig b:nth-child(3) { height: 7px; }
+#nowMeta .sig { height: 13px; } #nowMeta .sig b:nth-child(4) { height: 13px; } #nowMeta .sig b:nth-child(3) { height: 10px; }
+@media (max-width: 820px) { .ch-num { width: 44px; font-size: 18px; } }

@@ -692,7 +692,7 @@ function autoTestVisible() {
 /* =========================================================================
    Channel list (virtualized — handles playlists with tens of thousands of entries)
    ========================================================================= */
-const ROW = 74; // room for a two-line channel name plus the status line
+const ROW = 58; // room for a two-line channel name plus the status line
 // Fallback for when the list has no layout yet (hidden tab, first paint).
 const listHeight = () => $('#list').clientHeight || window.innerHeight || 800;
 let renderPending = false;
@@ -758,8 +758,15 @@ function renderList() {
 }
 // Signal-strength bars stand in for the status dot (cable-guide look).
 const BARS = { good: '▮▮▮▮', warn: '▮▮▯▯', bad: '▯▯▯▯', blocked: '✕', untested: '····' };
+// A small drawn signal meter (4 stair-step bars): same size on every device, unlike ▮ characters.
+const SIG_LEVEL = { good: 4, warn: 2, bad: 0, untested: 0 };
+function sigHtml(cls) {
+  if (cls === 'blocked') return '<i class="sig sig-x" aria-hidden="true">✕</i>';
+  const n = SIG_LEVEL[cls] ?? 0;
+  return `<i class="sig" aria-hidden="true">${[1, 2, 3, 4].map(i => `<b${i > n ? ' class="off"' : ''}></b>`).join('')}</i>`;
+}
 const badgeHtml = (st, fallback = '') =>
-  `<span class="badge ${st.cls}" aria-label="${esc(st.label || fallback || 'Untested')}"><i aria-hidden="true">${BARS[st.cls] || ''}</i>${esc(st.label || fallback)}</span>`;
+  `<span class="badge ${st.cls}" aria-label="${esc(st.label || fallback || 'Untested')}">${sigHtml(st.cls)}${esc(st.label || fallback)}</span>`;
 const chNum = ch => S.numByKey.get(ch.key) ?? '★';
 // A channel can sit in several groups, written "News;Sports" (iptv-org does this).
 const groupsOf = ch => ch.group.split(';').map(g => g.trim()).filter(Boolean);

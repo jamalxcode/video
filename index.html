@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=22">
+<link rel="stylesheet" href="style.css?v=23">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://iptv-org.github.io" crossorigin>
 </head>
@@ -121,11 +121,11 @@
     <div class="guide-foot">
       <span id="testProgress"></span>
       <span class="legend">
-        <span class="badge good" title="Good"><i>▮▮▮▮</i>Good</span>
-        <span class="badge warn" title="Slow or buffers"><i>▮▮▯▯</i>Slow</span>
-        <span class="badge bad" title="Broken"><i>▯▯▯▯</i>Broken</span>
-        <span class="badge blocked" title="Blocked in browser"><i>✕</i>Blocked</span>
-        <span class="badge untested" title="Untested"><i>····</i>New</span>
+        <span class="badge good" title="Good"><i class="sig"><b></b><b></b><b></b><b></b></i>Good</span>
+        <span class="badge warn" title="Slow or buffers"><i class="sig"><b></b><b></b><b class="off"></b><b class="off"></b></i>Slow</span>
+        <span class="badge bad" title="Broken"><i class="sig"><b class="off"></b><b class="off"></b><b class="off"></b><b class="off"></b></i>Broken</span>
+        <span class="badge blocked" title="Blocked in browser"><i class="sig sig-x">✕</i>Blocked</span>
+        <span class="badge untested" title="Untested"><i class="sig"><b class="off"></b><b class="off"></b><b class="off"></b><b class="off"></b></i>New</span>
       </span>
     </div>
   </aside>
@@ -183,7 +183,7 @@
 </dialog>
 
 <div id="toast" class="toast hidden"></div>
-<script src="app.js?v=22"></script>
+<script src="app.js?v=23"></script>
 <!-- GoatCounter analytics (not loaded on localhost; paths are prefixed with the host so all *.sala.company apps share one dashboard) -->
 <script>
   (function () {
