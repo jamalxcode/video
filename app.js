@@ -134,6 +134,25 @@ const DEFAULT_SETTINGS = { slowStartSec: 6, timeoutSec: 15, autoSkip: false, aut
 // Loaded automatically for first-time visitors (https://github.com/iptv-org/iptv).
 const IPTV_ORG = 'https://iptv-org.github.io/iptv/';
 const DEFAULT_PLAYLIST = { name: 'iptv-org (all channels)', url: IPTV_ORG + 'index.m3u' };
+// iptv-org.github.io is blocked on some networks (the connection is reset). The same files are
+// published from the repos' gh-pages branches, so try those hosts when the official one fails.
+const IPTV_MIRRORS = [
+  [/^https:\/\/iptv-org\.github\.io\/(iptv|api)\//i, 'https://raw.githubusercontent.com/iptv-org/$1/gh-pages/'],
+  [/^https:\/\/iptv-org\.github\.io\/(iptv|api)\//i, 'https://cdn.jsdelivr.net/gh/iptv-org/$1@gh-pages/'],
+];
+const mirrorUrls = url => [url, ...IPTV_MIRRORS.map(([re, to]) => url.replace(re, to)).filter(u => u !== url)];
+// fetch() that falls back through the mirrors of an iptv-org URL; any other URL is fetched as is.
+async function fetchAny(url, opts) {
+  let err;
+  for (const u of mirrorUrls(url)) {
+    try {
+      const r = await fetch(u, opts);
+      if (r.ok) return r;
+      err = new Error('HTTP ' + r.status);
+    } catch (e) { err = e; }
+  }
+  throw err;
+}
 const REFRESH_AFTER = 24 * 3600e3;   // re-download saved playlists older than this
 const FRESH_FOR = 6 * 3600e3;        // test/play results newer than this aren't re-tested
 const S = {
@@ -296,8 +315,8 @@ async function loadLanguages() {
   L.loading = true;
   try {
     const [feeds, langs] = await Promise.all([
-      fetch(LANG_API + 'feeds.json').then(r => r.json()),
-      fetch(LANG_API + 'languages.json').then(r => r.json()),
+      fetchAny(LANG_API + 'feeds.json').then(r => r.json()),
+      fetchAny(LANG_API + 'languages.json').then(r => r.json()),
     ]);
     const main = new Map();
     const out = [];
@@ -713,7 +732,7 @@ function renderList() {
     inner.innerHTML = S.loading
       ? `<div class="empty"><div class="spinner"></div>${esc(S.loading)}</div>`
       : !S.playlists.length
-      ? '<div class="empty">No playlist yet.<br><button class="primary" data-act="add">+ Add a playlist</button></div>'
+      ? '<div class="empty">No playlist yet.<br><button class="primary" data-act="seed">Load iptv-org (all channels)</button> <button data-act="add">+ Add your own</button></div>'
       : S.ui.status === 'fav' && !S.favs.size
         ? '<div class="empty">No favorites yet.<br>Tap ☆ next to a channel to save it here.</div>'
         : S.ui.status === 'recent' && !S.recent.length
@@ -1425,8 +1444,7 @@ function toggleFav(ch) {
    ========================================================================= */
 async function fetchPlaylist(url) {
   try {
-    const r = await fetch(effectiveUrl(url), { cache: 'no-store' });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const r = await fetchAny(effectiveUrl(url), { cache: 'no-store' });
     return await r.text();
   } catch (e) {
     throw new Error(`Couldn’t download the playlist (${e.message}). The server may block browsers: download the .m3u file and upload it instead.`);
@@ -1640,6 +1658,7 @@ function wire() {
 
   $('#listInner').addEventListener('click', e => {
     if (e.target.closest('[data-act="add"]')) return openAddDialog();
+    if (e.target.closest('[data-act="seed"]')) return loadWithSpinner(DEFAULT_PLAYLIST, true);
     const star = e.target.closest('[data-star]');
     if (star) { e.stopPropagation(); return toggleFav(S.filtered[+star.dataset.star]); }
     const row = e.target.closest('.ch');
@@ -1856,19 +1875,19 @@ async function init() {
   if (qp && !S.playlists.some(p => p.url === qp)) {
     loadWithSpinner({ url: qp });
   } else if (!S.playlists.length && !S.ui.seeded) {
-    // First visit: preload the iptv-org list. Only once, so removing it sticks.
-    S.ui.seeded = true;
-    saveUi();
-    loadWithSpinner(DEFAULT_PLAYLIST);
+    // First visit: preload the iptv-org list. Remembered only once it has loaded, so a failed
+    // download is retried next visit, while removing the list on purpose sticks.
+    loadWithSpinner(DEFAULT_PLAYLIST, true);
   }
   // Fetch the HLS library in the background once the page is up, so the first click is quick.
   setTimeout(() => loadLib('hls').catch(() => {}), 1500);
 }
-async function loadWithSpinner(pl) {
+async function loadWithSpinner(pl, seed = false) {
   S.loading = `Loading ${pl.name || 'playlist'}…`;
   renderList();
   try {
     await addPlaylist(pl);
+    if (seed) { S.ui.seeded = true; saveUi(); }
   } catch (e) {
     toast(e.message);
   } finally {
@@ -1883,7 +1902,7 @@ async function loadIptvOrgChoices() {
   if (countriesLoaded) return;
   countriesLoaded = true;
   try {
-    const list = await (await fetch(IPTV_ORG.replace('/iptv/', '/api/') + 'countries.json')).json();
+    const list = await (await fetchAny(LANG_API + 'countries.json')).json();
     list.sort((a, b) => a.name.localeCompare(b.name));
     $('#plPreset').insertAdjacentHTML('beforeend', '<optgroup label="By country">' +
       list.map(c => `<option value="${IPTV_ORG}countries/${esc(c.code.toLowerCase())}.m3u">${esc(c.flag || '')} ${esc(c.name)}</option>`).join('') +
