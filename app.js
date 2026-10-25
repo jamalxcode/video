@@ -135,23 +135,52 @@ const DEFAULT_SETTINGS = { slowStartSec: 6, timeoutSec: 15, autoSkip: false, aut
 const IPTV_ORG = 'https://iptv-org.github.io/iptv/';
 const DEFAULT_PLAYLIST = { name: 'iptv-org (all channels)', url: IPTV_ORG + 'index.m3u' };
 // iptv-org.github.io is blocked on some networks (the connection is reset). The same files are
-// published from the repos' gh-pages branches, so try those hosts when the official one fails.
+// published from the repos' gh-pages branches on these hosts, tried in this order.
+const IPTV_RE = /^https:\/\/iptv-org\.github\.io\/(iptv|api)\//i;
 const IPTV_MIRRORS = [
-  [/^https:\/\/iptv-org\.github\.io\/(iptv|api)\//i, 'https://raw.githubusercontent.com/iptv-org/$1/gh-pages/'],
-  [/^https:\/\/iptv-org\.github\.io\/(iptv|api)\//i, 'https://cdn.jsdelivr.net/gh/iptv-org/$1@gh-pages/'],
+  'https://raw.githubusercontent.com/iptv-org/$1/gh-pages/',
+  'https://cdn.jsdelivr.net/gh/iptv-org/$1@gh-pages/',
+  'https://fastly.jsdelivr.net/gh/iptv-org/$1@gh-pages/',
+  'https://gcore.jsdelivr.net/gh/iptv-org/$1@gh-pages/',
+  'https://rawcdn.githack.com/iptv-org/$1/gh-pages/',
 ];
-const mirrorUrls = url => [url, ...IPTV_MIRRORS.map(([re, to]) => url.replace(re, to)).filter(u => u !== url)];
-// fetch() that falls back through the mirrors of an iptv-org URL; any other URL is fetched as is.
-async function fetchAny(url, opts) {
-  let err;
-  for (const u of mirrorUrls(url)) {
-    try {
-      const r = await fetch(u, opts);
-      if (r.ok) return r;
-      err = new Error('HTTP ' + r.status);
-    } catch (e) { err = e; }
-  }
-  throw err;
+const mirrorUrls = url => (IPTV_RE.test(url) ? [url, ...IPTV_MIRRORS.map(to => url.replace(IPTV_RE, to))] : [url]);
+const MIRROR_STAGGER = 3000; // start the next mirror after this long without an answer
+// fetch() over the mirrors of an iptv-org URL: the first one to answer OK wins, the rest are
+// cancelled. A host that fails at once hands over immediately; one that hangs is overtaken.
+function fetchAny(url, opts = {}) {
+  const urls = mirrorUrls(url);
+  return new Promise((resolve, reject) => {
+    const ctls = [];
+    let next = 0, pending = 0, done = false, lastErr;
+    const settle = (ok, v) => {
+      if (done) return;
+      done = true;
+      ok ? resolve(v) : reject(v);
+    };
+    const start = () => {
+      if (done || next >= urls.length) return;
+      const u = urls[next++];
+      const ctl = new AbortController();
+      ctls.push(ctl);
+      pending++;
+      fetch(u, { ...opts, signal: ctl.signal })
+        .then(r => {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          for (const c of ctls) if (c !== ctl) c.abort();
+          settle(true, r);
+        })
+        .catch(e => {
+          pending--;
+          if (done) return;
+          lastErr = e;
+          if (next < urls.length) start();
+          else if (!pending) settle(false, lastErr || new Error('No source answered'));
+        });
+      if (next < urls.length) setTimeout(start, MIRROR_STAGGER);
+    };
+    start();
+  });
 }
 const REFRESH_AFTER = 24 * 3600e3;   // re-download saved playlists older than this
 const FRESH_FOR = 6 * 3600e3;        // test/play results newer than this aren't re-tested
@@ -172,6 +201,7 @@ const S = {
   lit: new Map(),       // channel key -> when it was just confirmed good (for the light-up effect)
   current: null,
   loading: '',          // message shown in the list while a playlist downloads
+  loadError: '',        // why the automatic channel-list download failed (shown while retrying)
 };
 const saveUi = () => DB.put('kv', { ...S.ui }, 'ui');
 
@@ -732,7 +762,9 @@ function renderList() {
     inner.innerHTML = S.loading
       ? `<div class="empty"><div class="spinner"></div>${esc(S.loading)}</div>`
       : !S.playlists.length
-      ? '<div class="empty">No playlist yet.<br><button class="primary" data-act="seed">Load iptv-org (all channels)</button> <button data-act="add">+ Add your own</button></div>'
+      ? S.loadError
+        ? `<div class="empty">Couldn’t download the channel list.<br><small>${esc(S.loadError)}</small><br>Retrying automatically… <button class="primary" data-act="seed">Retry now</button> <button data-act="add">+ Add your own</button></div>`
+        : '<div class="empty">No playlist yet.<br><button class="primary" data-act="seed">Load iptv-org (all channels)</button> <button data-act="add">+ Add your own</button></div>'
       : S.ui.status === 'fav' && !S.favs.size
         ? '<div class="empty">No favorites yet.<br>Tap ☆ next to a channel to save it here.</div>'
         : S.ui.status === 'recent' && !S.recent.length
@@ -1563,6 +1595,7 @@ async function deletePlaylist() {
   const p = S.playlists.find(x => x.id === S.ui.currentId);
   if (!p || !confirm(`Remove playlist “${p.name}”? Your favorites and ratings are kept.`)) return;
   await DB.del('kv', 'pl:' + p.id);
+  if (p.url === DEFAULT_PLAYLIST.url) { S.ui.removedDefault = true; saveUi(); }
   S.playlists = S.playlists.filter(x => x !== p);
   await DB.put('kv', S.playlists, 'playlists');
   await selectPlaylist(S.playlists[0]?.id || null);
@@ -1658,7 +1691,7 @@ function wire() {
 
   $('#listInner').addEventListener('click', e => {
     if (e.target.closest('[data-act="add"]')) return openAddDialog();
-    if (e.target.closest('[data-act="seed"]')) return loadWithSpinner(DEFAULT_PLAYLIST, true);
+    if (e.target.closest('[data-act="seed"]')) { S.ui.removedDefault = false; saveUi(); return ensureDefaultPlaylist(true); }
     const star = e.target.closest('[data-star]');
     if (star) { e.stopPropagation(); return toggleFav(S.filtered[+star.dataset.star]); }
     const row = e.target.closest('.ch');
@@ -1874,22 +1907,48 @@ async function init() {
   const qp = new URLSearchParams(location.search).get('m3u');
   if (qp && !S.playlists.some(p => p.url === qp)) {
     loadWithSpinner({ url: qp });
-  } else if (!S.playlists.length && !S.ui.seeded) {
-    // First visit: preload the iptv-org list. Remembered only once it has loaded, so a failed
-    // download is retried next visit, while removing the list on purpose sticks.
-    loadWithSpinner(DEFAULT_PLAYLIST, true);
+  } else {
+    // No playlist: load the iptv-org list by itself, and keep retrying until it arrives.
+    // Only removing that list on purpose (the 🗑 button) stops this.
+    ensureDefaultPlaylist();
+    window.addEventListener('online', () => ensureDefaultPlaylist(true));
   }
   // Fetch the HLS library in the background once the page is up, so the first click is quick.
   setTimeout(() => loadLib('hls').catch(() => {}), 1500);
 }
-async function loadWithSpinner(pl, seed = false) {
+async function loadWithSpinner(pl) {
   S.loading = `Loading ${pl.name || 'playlist'}…`;
   renderList();
   try {
     await addPlaylist(pl);
-    if (seed) { S.ui.seeded = true; saveUi(); }
+    return true;
   } catch (e) {
     toast(e.message);
+    return false;
+  } finally {
+    S.loading = '';
+    renderList();
+  }
+}
+// Automatic channel list: downloads the iptv-org list when there is none, retrying with a
+// growing pause (5 s, 15 s, 30 s, then every minute) and again as soon as the network returns.
+const RETRY_PAUSES = [5e3, 15e3, 30e3, 60e3];
+let retryTimer = null, retryCount = 0;
+async function ensureDefaultPlaylist(now = false) {
+  clearTimeout(retryTimer);
+  retryTimer = null;
+  if (S.playlists.length || S.ui.removedDefault || S.loading) return;
+  if (now) retryCount = 0;
+  S.loading = `Loading ${DEFAULT_PLAYLIST.name}…`;
+  renderList();
+  try {
+    await addPlaylist(DEFAULT_PLAYLIST);
+    S.loadError = '';
+    retryCount = 0;
+  } catch {
+    S.loadError = `None of the ${1 + IPTV_MIRRORS.length} sources answered. Check your internet connection.`;
+    const pause = RETRY_PAUSES[Math.min(retryCount++, RETRY_PAUSES.length - 1)];
+    retryTimer = setTimeout(ensureDefaultPlaylist, pause);
   } finally {
     S.loading = '';
     renderList();
