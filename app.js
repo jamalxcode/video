@@ -135,9 +135,11 @@ const DEFAULT_SETTINGS = { slowStartSec: 6, timeoutSec: 15, autoSkip: false, aut
 const IPTV_ORG = 'https://iptv-org.github.io/iptv/';
 const DEFAULT_PLAYLIST = { name: 'iptv-org (all channels)', url: IPTV_ORG + 'index.m3u' };
 // iptv-org.github.io is blocked on some networks (the connection is reset). The same files are
-// published from the repos' gh-pages branches on these hosts, tried in this order.
+// published from the repos' gh-pages branches on these hosts, tried in this order; the first mirror
+// is this site's own Cloudflare Worker (mirror/mirror.js), which fetches from iptv-org for you.
 const IPTV_RE = /^https:\/\/iptv-org\.github\.io\/(iptv|api)\//i;
 const IPTV_MIRRORS = [
+  'https://video-mirror.jamal-akuna-matata.workers.dev/$1/', // this site's own copy on Cloudflare (cached a few hours)
   'https://raw.githubusercontent.com/iptv-org/$1/gh-pages/',
   'https://cdn.jsdelivr.net/gh/iptv-org/$1@gh-pages/',
   'https://fastly.jsdelivr.net/gh/iptv-org/$1@gh-pages/',
