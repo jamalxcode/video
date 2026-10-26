@@ -4,7 +4,7 @@
      page (index.html)   network first, cached copy when offline
      app files           cached copy first, refreshed in the background
      player libraries    cached once from the CDN */
-const CACHE = 'video-shell-v2';
+const CACHE = 'video-shell-v3';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'favicon.svg', 'favicon-48.png', 'apple-touch-icon.png'];
 const LIBS = /^https:\/\/(cdn\.jsdelivr\.net\/npm\/(hls\.js|mpegts\.js|country-flag-emoji-polyfill)|fonts\.(googleapis|gstatic)\.com)/;
 

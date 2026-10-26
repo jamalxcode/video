@@ -100,13 +100,19 @@ const isTimeout = e => e && (e.name === 'TimeoutError' || e.name === 'AbortError
 /* Video libraries load on demand (warmed up in the background), not before first paint. */
 const LIBS = {
   hls: 'https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js',
-  mpegts: 'https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.min.js',
+  mpegts: 'https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.js', // the package ships no .min.js; the CDN's own minified copy can't be hash-checked
+};
+// The browser checks each file against its hash before running it, so a changed or tampered copy is refused.
+const LIB_HASH = {
+  hls: 'sha384-9v3HcdYrO3D+OPDTjZ40RXocgE4GtXVCd3/mCS62JsM93JXgI1afJVuwjFvsu6ni',
+  mpegts: 'sha384-gWBszQzp4KdKY3PNUrFbTuvAcChcUSMKpSrt/OjDS3qe16Ef4OZSfP5E/+KcPueP',
 };
 const libLoads = {};
 function loadLib(name) {
   return libLoads[name] || (libLoads[name] = new Promise((res, rej) => {
     const s = document.createElement('script');
     s.src = LIBS[name];
+    if (LIB_HASH[name]) { s.integrity = LIB_HASH[name]; s.crossOrigin = 'anonymous'; }
     s.async = true;
     s.onload = res;
     s.onerror = () => { delete libLoads[name]; s.remove(); rej(new Error('Couldn’t load the video player library')); };
@@ -1480,11 +1486,23 @@ const Share = (() => {
     }
     return 'j' + b64(new TextEncoder().encode(json));
   }
+  const MAX_UNPACKED = 4 * 1024 * 1024; // a link can't unpack to more than this (guards against a crafted, hugely compressed link)
   async function unpack(s) {
+    if (s.length > MAX_CHARS + 1000) throw new Error('too long');
     const bytes = unb64(s.slice(1));
     if (s[0] === 'z') {
       const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
-      return JSON.parse(await new Response(stream).text());
+      const reader = stream.getReader();
+      const chunks = [];
+      let size = 0;
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        size += value.length;
+        if (size > MAX_UNPACKED) { reader.cancel(); throw new Error('too big'); }
+        chunks.push(value);
+      }
+      return JSON.parse(new TextDecoder().decode(await new Blob(chunks).arrayBuffer()));
     }
     return JSON.parse(new TextDecoder().decode(bytes));
   }
@@ -2005,7 +2023,9 @@ async function init() {
   const qp = new URLSearchParams(location.search).get('m3u');
   if (shared) { /* handled above */ }
   else if (qp && !S.playlists.some(p => p.url === qp)) {
-    loadWithSpinner({ url: qp });
+    // Ask first: a link shouldn't be able to add a playlist to someone's player without them noticing.
+    history.replaceState(null, '', location.pathname);
+    if (/^https?:\/\//i.test(qp) && confirm(`Add the playlist from ${new URL(qp).host}?`)) loadWithSpinner({ url: qp });
   } else {
     // No playlist: load the iptv-org list by itself, and keep retrying until it arrives.
     // Only removing that list on purpose (the 🗑 button) stops this.
