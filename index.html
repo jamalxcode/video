@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=28">
+<link rel="stylesheet" href="style.css?v=29">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://iptv-org.github.io" crossorigin>
 </head>
@@ -173,6 +173,8 @@
     <h3>Your data</h3>
     <p class="muted small">Playlists, favorites, ratings and test results are saved only in this browser. Use a backup to move them to another browser or device.</p>
     <div class="btns">
+      <button type="button" id="shareFavBtn" title="A link that carries your favorite channels to another phone or person">Share favorites</button>
+      <button type="button" id="shareListBtn" title="A link to the playlist you're on">Share this playlist</button>
       <button type="button" id="exportBtn">Export backup</button>
       <label class="filebtn">Import backup<input id="importFile" type="file" accept=".json,application/json" hidden></label>
       <button type="button" id="clearStatsBtn">Clear test history</button>
@@ -186,7 +188,7 @@
 </dialog>
 
 <div id="toast" class="toast hidden"></div>
-<script src="app.js?v=29"></script>
+<script src="app.js?v=30"></script>
 <!-- Offline shell: the app's files are kept in the browser (sw.js), so it opens instantly and without network -->
 <script>
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});

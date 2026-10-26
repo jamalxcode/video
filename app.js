@@ -1463,6 +1463,92 @@ function setRating(r) {
   saveH(h);
   toast(r ? 'Rating saved for this source' : 'Rating cleared');
 }
+/* =========================================================================
+   Share links: your favorites, or a playlist, carried inside a link (after the #), no account needed.
+   The link holds the channels themselves (compressed) or, for playlists from a URL, just the URL.
+   Opening the link offers to add them to this browser.
+   ========================================================================= */
+const Share = (() => {
+  const MAX_CHARS = 60000; // longer links break in chats and browsers
+  const b64 = bytes => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const unb64 = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+  async function pack(obj) {
+    const json = JSON.stringify(obj);
+    if (typeof CompressionStream === 'function') {
+      const stream = new Blob([json]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+      return 'z' + b64(new Uint8Array(await new Response(stream).arrayBuffer()));
+    }
+    return 'j' + b64(new TextEncoder().encode(json));
+  }
+  async function unpack(s) {
+    const bytes = unb64(s.slice(1));
+    if (s[0] === 'z') {
+      const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+      return JSON.parse(await new Response(stream).text());
+    }
+    return JSON.parse(new TextDecoder().decode(bytes));
+  }
+  const attr = (k, v) => (v ? ` ${k}="${String(v).replace(/"/g, '')}"` : '');
+  // The channels as an M3U, the format this site and every player read. Channel ids are kept so iptv-org channels stay recognisable.
+  function toM3u(channels) {
+    const lines = ['#EXTM3U'];
+    for (const ch of channels) for (const s of ch.sources || []) {
+      const id = (ch.key || '').startsWith('id:') ? ch.key.slice(3) : '';
+      lines.push(`#EXTINF:-1${attr('tvg-id', id)}${attr('tvg-logo', ch.logo)}${attr('group-title', ch.group)}${attr('tvg-country', (countryOf(ch) || '').toUpperCase())},${ch.name}`);
+      lines.push(s.url);
+    }
+    return lines.join('\n');
+  }
+  const link = payload => `${location.origin}${location.pathname}#share=${payload}`;
+  async function offer(url, what) {
+    if (navigator.share && /Mobi|Android/i.test(navigator.userAgent)) {
+      try { await navigator.share({ title: what, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
+    }
+    try { await navigator.clipboard.writeText(url); toast(`Link copied: ${what}`); }
+    catch { prompt('Copy this link:', url); }
+  }
+  async function shareFavorites() {
+    const favs = [...S.favs.values()];
+    if (!favs.length) return toast('No favorites to share yet');
+    const payload = await pack({ t: 'fav', m3u: toM3u(favs) });
+    if (payload.length > MAX_CHARS) return toast('Too many favorites for one link. Use Export backup instead.');
+    offer(link(payload), `${favs.length} favorite channel${favs.length > 1 ? 's' : ''}`);
+  }
+  async function shareList() {
+    const p = S.playlists.find(x => x.id === S.ui.currentId);
+    if (!p) return toast('Pick a playlist first');
+    const obj = p.url ? { t: 'list', name: p.name, url: p.url } : { t: 'list', name: p.name, m3u: (await DB.get('kv', 'pl:' + p.id)) || toM3u(S.channels) };
+    const payload = await pack(obj);
+    if (payload.length > MAX_CHARS) return toast('This playlist is too big for one link. Share its source URL or a backup instead.');
+    offer(link(payload), p.name);
+  }
+  // Opening a shared link: offer to add what it carries.
+  async function receive() {
+    const m = location.hash.match(/^#share=([A-Za-z0-9_\-]+)/);
+    if (!m) return;
+    history.replaceState(null, '', location.pathname + location.search);
+    let obj;
+    try { obj = await unpack(m[1]); } catch { return toast('This share link is damaged'); }
+    if (obj.t === 'fav' && obj.m3u) {
+      const chs = buildChannels(obj.m3u);
+      if (!chs.length) return toast('The link had no channels');
+      if (!confirm(`Add ${chs.length} shared favorite channel${chs.length > 1 ? 's' : ''} to yours?`)) return;
+      let added = 0;
+      for (const ch of chs) {
+        if (S.favs.has(ch.key)) continue;
+        const f = favRecord(ch); S.favs.set(ch.key, f); DB.put('favs', f); added++;
+        for (const s of ch.sources) if (!S.byUrl.has(s.url)) S.byUrl.set(s.url, ch);
+      }
+      toast(added ? `Added ${added} favorite${added > 1 ? 's' : ''} (★ Favorites)` : 'You already had all of them');
+      if (S.ui.status === 'fav') { rebuildGroups(); applyFilters(true); } else scheduleRender();
+    } else if (obj.t === 'list') {
+      if (!confirm(`Add the shared playlist “${obj.name || 'Shared playlist'}”?`)) return;
+      loadWithSpinner({ name: obj.name || 'Shared playlist', url: obj.url, text: obj.m3u });
+    }
+  }
+  return { shareFavorites, shareList, receive };
+})();
+
 const favRecord = ch => ({ key: ch.key, name: ch.name, logo: ch.logo, group: ch.group, country: countryOf(ch), sources: ch.sources, addedAt: Date.now() });
 function toggleFav(ch) {
   if (S.favs.has(ch.key)) {
@@ -1791,6 +1877,8 @@ function wire() {
     toast('Settings saved');
   });
   $('#exportBtn').addEventListener('click', exportData);
+  $('#shareFavBtn').addEventListener('click', Share.shareFavorites);
+  $('#shareListBtn').addEventListener('click', Share.shareList);
   $('#importFile').addEventListener('change', e => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ''; });
   $('#clearStatsBtn').addEventListener('click', clearStats);
   $('#clearAllBtn').addEventListener('click', eraseAll);
@@ -1909,9 +1997,14 @@ async function init() {
   if (last?.sources) { S.current = last; scrollToCurrent(); scheduleRender(); }
   renderNow();
 
+  // A share link (#share=…) carries favorites or a playlist: offer to add them.
+  const shared = location.hash.startsWith('#share=');
+  if (shared) Share.receive();
+  addEventListener('hashchange', () => { if (location.hash.startsWith('#share=')) Share.receive(); });
   // Shortcut: ?m3u=<playlist url> adds that playlist (once).
   const qp = new URLSearchParams(location.search).get('m3u');
-  if (qp && !S.playlists.some(p => p.url === qp)) {
+  if (shared) { /* handled above */ }
+  else if (qp && !S.playlists.some(p => p.url === qp)) {
     loadWithSpinner({ url: qp });
   } else {
     // No playlist: load the iptv-org list by itself, and keep retrying until it arrives.
