@@ -33,6 +33,10 @@ A browser-based player for M3U / M3U8 IPTV playlists, styled like a 70s wood-pan
 - **Keyboard / TV remote**: ↑↓ move through the guide, Enter plays, ←→ previous/next channel, PgUp/PgDn jump a page, type a channel number to jump, `F` favorite, `S` sleep timer, Space pause, Esc back to what's playing.
 - **Retro look**: wood-cabinet TV with a channel dial on desktop, a full-width player with a control strip on phones. Scanlines and static between channels can be switched off in Settings.
 
+## Works offline
+
+The app's own files are kept in the browser by a small service worker (`sw.js`), so the site opens instantly and still opens with no network, showing your playlists and favorites (streams need network). The page itself is fetched fresh when the network answers within 4 seconds, so updates arrive normally.
+
 ## Your data stays in your browser
 
 Playlists, favorites, ratings, test results and settings are stored in the browser's IndexedDB. Nothing is uploaded anywhere, so every person and every browser has its own separate list. To move your data to another device, use **⚙ → Export backup**, then **Import backup** on the other device.
