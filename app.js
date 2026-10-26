@@ -632,14 +632,15 @@ function inferFromHost(url) {
 const nextTestable = ch => orderedSources(ch).find(s => !isFresh(s) && !s.hdr && !T.queued.has(s.url));
 
 const PER_HOST = 2;
-const T = { queue: [], queued: new Set(), force: new Set(), hostActive: new Map(), activeUrls: new Set(), active: 0, done: 0, total: 0, manual: false };
-function queueTests(urls, { manual = false, force = false, front = false } = {}) {
+const T = { queue: [], queued: new Set(), force: new Set(), shown: new Set(), hostActive: new Map(), activeUrls: new Set(), active: 0, done: 0, total: 0, manual: false };
+function queueTests(urls, { manual = false, force = false, front = false, show = false } = {}) {
   if (manual) { T.queue = []; T.queued.clear(); T.done = 0; T.total = T.active; T.manual = true; }
   const add = [];
   for (const u of urls) {
     if (T.queued.has(u)) continue;
     T.queued.add(u);
     if (force) T.force.add(u);
+    if (show) T.shown.add(u);
     add.push(u);
     T.total++;
   }
@@ -665,6 +666,7 @@ function finishTest(url) {
   T.done++;
   T.queued.delete(url);
   T.force.delete(url);
+  T.shown.delete(url);
   if (!T.active && !T.queue.length) { T.manual = false; T.done = T.total = 0; }
   updateTestUi();
 }
@@ -705,11 +707,12 @@ function pump() {
       });
   }
 }
+// Only a test you asked for (Test channels, or Test on a channel) shows its progress; automatic tests work quietly and just update the badges.
 function updateTestUi() {
   const busy = T.active > 0 || T.queue.length > 0;
   $('#testBtn').textContent = T.manual && busy ? 'Stop testing' : 'Test channels';
-  $('#testProgress').textContent = busy ? `Checking ${T.done}/${T.total}…` : '';
-  $('#scanBar').classList.toggle('on', busy);
+  $('#testProgress').textContent = T.manual && busy ? `Checking ${T.done}/${T.total}…` : '';
+  $('#scanBar').classList.toggle('on', T.manual && busy);
   scheduleRender();
 }
 // Rows are grey until a channel proves it streams well; then it lights up blue (briefly animated).
@@ -718,8 +721,9 @@ function lightUp(ch) {
 }
 // What a row should say while the tester is busy with it.
 function testState(ch) {
-  if (ch.sources.some(s => T.activeUrls.has(s.url))) return 'checking';
-  if (ch.sources.some(s => T.queued.has(s.url))) return 'queued';
+  const vis = s => T.manual || T.shown.has(s.url);
+  if (ch.sources.some(s => vis(s) && T.activeUrls.has(s.url))) return 'checking';
+  if (ch.sources.some(s => vis(s) && T.queued.has(s.url))) return 'queued';
   return '';
 }
 function testUrlsFor(channels) {
@@ -1729,7 +1733,7 @@ function wire() {
   });
   $('#testOneBtn').addEventListener('click', () => {
     if (!S.current) return;
-    queueTests(S.current.sources.map(s => s.url), { force: true, front: true });
+    queueTests(S.current.sources.map(s => s.url), { force: true, front: true, show: true });
     toast(S.current.sources.length > 1 ? `Testing all ${S.current.sources.length} sources…` : 'Testing…');
   });
 

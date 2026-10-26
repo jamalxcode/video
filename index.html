@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=27">
+<link rel="stylesheet" href="style.css?v=28">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://iptv-org.github.io" crossorigin>
 </head>
@@ -158,15 +158,18 @@
 <dialog id="setDlg">
   <form method="dialog" id="setForm">
     <h3>Settings</h3>
-    <label for="sSlow">Count as a "slow start" after (seconds)</label>
-    <input id="sSlow" type="number" min="1" max="60">
-    <label for="sTimeout">Warn that a channel isn't loading after (seconds)</label>
-    <input id="sTimeout" type="number" min="3" max="120">
     <label class="check"><input id="sAutoSkip" type="checkbox"> Skip to the next working channel when a stream fails or times out</label>
-    <label class="check"><input id="sAutoTest" type="checkbox"> Test channels automatically as you scroll</label>
     <label class="check"><input id="sFx" type="checkbox"> Retro screen effects (scanlines and static between channels)</label>
-    <label for="sConc">Channels to test at the same time</label>
-    <input id="sConc" type="number" min="1" max="16">
+    <details class="adv">
+      <summary>Advanced</summary>
+      <label class="check"><input id="sAutoTest" type="checkbox"> Test channels quietly as you scroll</label>
+      <label for="sSlow">Count as a "slow start" after (seconds)</label>
+      <input id="sSlow" type="number" min="1" max="60">
+      <label for="sTimeout">Warn that a channel isn't loading after (seconds)</label>
+      <input id="sTimeout" type="number" min="3" max="120">
+      <label for="sConc">Channels to test at the same time</label>
+      <input id="sConc" type="number" min="1" max="16">
+    </details>
     <h3>Your data</h3>
     <p class="muted small">Playlists, favorites, ratings and test results are saved only in this browser. Use a backup to move them to another browser or device.</p>
     <div class="btns">
@@ -183,7 +186,7 @@
 </dialog>
 
 <div id="toast" class="toast hidden"></div>
-<script src="app.js?v=28"></script>
+<script src="app.js?v=29"></script>
 <!-- GoatCounter analytics (not loaded on localhost; paths are prefixed with the host so all *.sala.company apps share one dashboard) -->
 <script>
   (function () {
