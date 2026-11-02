@@ -932,7 +932,9 @@ const pageRows = () => Math.max(1, Math.floor(listHeight() / ROW) - 1);
    takes over automatically. Every attempt is measured and remembered.
    ========================================================================= */
 const video = $('#video');
-let hls = null, mpeg = null, engine = '', nativeFail = null;
+let hls = null, mpeg = null, engine = '', nativeFail = null, nativeHls = false;
+// Safari's AirPlay support; only Apple's browsers have this.
+const AIRPLAY = 'WebKitPlaybackTargetAvailabilityEvent' in window;
 let playToken = 0, session = null, startTimer = null;
 
 /* The TV screen around the video: test pattern when idle, static while tuning,
@@ -1049,7 +1051,7 @@ const VFD = (() => {
       setHtml('vfdBuf', `${bufMeter(full)} ${Math.round(sec)}s`, sec < 3 ? 'lvl-bad' : sec < 8 ? 'lvl-warn' : 'lvl-good');
     } else setHtml('vfdBuf', bufMeter(0));
     set('vfdTime', s?.liveAt ? since(Date.now() - s.liveAt) : '--:--');
-    const kind = { hls: 'HLS', mpegts: 'TS', native: 'DIRECT' }[engine] || '';
+    const kind = nativeHls ? 'HLS' : { hls: 'HLS', mpegts: 'TS', native: 'DIRECT' }[engine] || '';
     set('vfdSrc', s ? `${s.idx + 1}/${s.order.length}${kind ? ' · ' + kind : ''}` : ch ? `${ch.sources.length} AVAIL` : '—');
     // Next channel in the guide, with its signal so you know before you switch.
     const i = ch ? S.filtered.findIndex(c => c.key === ch.key) : -1;
@@ -1151,6 +1153,7 @@ function teardown() {
     mpeg = null;
   }
   nativeFail = null;
+  nativeHls = false;
   engine = '';
   video.removeAttribute('src');
   video.load();
@@ -1233,7 +1236,7 @@ function nextSource() {
       kind = await sniff(url);
       H(s.url).kind = kind; // saved with the play result
     }
-    if (kind === 'hls') await loadLib('hls').catch(() => {});
+    if (kind === 'hls' && !(AIRPLAY && video.canPlayType('application/vnd.apple.mpegurl'))) await loadLib('hls').catch(() => {});
     else if (kind === 'mpegts' || kind === 'flv') await loadLib('mpegts').catch(() => {});
     if (token !== playToken) return;
     startEngine(kind, url, token);
@@ -1244,7 +1247,13 @@ function nextSource() {
 function startEngine(kind, url, token) {
   const fail = msg => { if (token === playToken) onPlayFail(msg); };
   if (kind === 'hls') {
-    if (window.Hls && Hls.isSupported()) {
+    // Safari (iPhone, iPad, Mac) plays HLS itself, and only a stream the browser
+    // plays itself can be handed to an Apple TV with AirPlay; hls.js builds the
+    // video inside the page, so AirPlay can't send it. So on AirPlay-capable
+    // browsers use the built-in player; everywhere else keep hls.js.
+    if (AIRPLAY && video.canPlayType('application/vnd.apple.mpegurl')) {
+      nativeHls = true;
+    } else if (window.Hls && Hls.isSupported()) {
       engine = 'hls';
       hls = new Hls({
         enableWorker: true,
