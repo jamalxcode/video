@@ -139,7 +139,16 @@ function preconnect(url) {
 const DEFAULT_SETTINGS = { slowStartSec: 6, timeoutSec: 15, autoSkip: false, autoTest: true, concurrency: 6, fx: true };
 // Loaded automatically for first-time visitors (https://github.com/iptv-org/iptv).
 const IPTV_ORG = 'https://iptv-org.github.io/iptv/';
-const DEFAULT_PLAYLIST = { name: 'iptv-org (all channels)', url: IPTV_ORG + 'index.m3u' };
+// Free-TV (https://github.com/Free-TV/IPTV): a hand-picked list of channels that are free to watch,
+// about 2,000 of them, many not in iptv-org (Italian, Greek, Hungarian, Pluto TV and more).
+const FREE_TV = 'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8';
+// A playlist's url can hold several lists separated by spaces; they're downloaded together and
+// combined, so a channel found in both becomes one channel with backup sources.
+const DEFAULT_PLAYLIST = { name: 'All channels (iptv-org + Free-TV)', url: IPTV_ORG + 'index.m3u ' + FREE_TV };
+// What the default list was before Free-TV was added; saved copies are upgraded on start.
+const OLD_DEFAULT = { name: 'iptv-org (all channels)', url: IPTV_ORG + 'index.m3u' };
+const isDefaultList = url => url === DEFAULT_PLAYLIST.url || url === OLD_DEFAULT.url;
+const splitUrls = url => (url || '').split(/\s+/).filter(Boolean);
 // iptv-org.github.io is blocked on some networks (the connection is reset). The same files are
 // published from the repos' gh-pages branches on these hosts, tried in this order; the first mirror
 // is this site's own Cloudflare Worker (mirror/mirror.js), which fetches from iptv-org for you.
@@ -152,7 +161,16 @@ const IPTV_MIRRORS = [
   'https://gcore.jsdelivr.net/gh/iptv-org/$1@gh-pages/',
   'https://rawcdn.githack.com/iptv-org/$1/gh-pages/',
 ];
-const mirrorUrls = url => (IPTV_RE.test(url) ? [url, ...IPTV_MIRRORS.map(to => url.replace(IPTV_RE, to))] : [url]);
+// Any other file on raw.githubusercontent.com (Free-TV and the like) has the same CDN copies.
+const RAW_RE = /^https:\/\/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/([^/]+)\//i;
+const RAW_MIRRORS = [
+  'https://cdn.jsdelivr.net/gh/$1/$2@$3/',
+  'https://fastly.jsdelivr.net/gh/$1/$2@$3/',
+  'https://gcore.jsdelivr.net/gh/$1/$2@$3/',
+  'https://rawcdn.githack.com/$1/$2/$3/',
+];
+const mirrorUrls = url => (IPTV_RE.test(url) ? [url, ...IPTV_MIRRORS.map(to => url.replace(IPTV_RE, to))]
+  : RAW_RE.test(url) ? [url, ...RAW_MIRRORS.map(to => url.replace(RAW_RE, to))] : [url]);
 const MIRROR_STAGGER = 3000; // start the next mirror after this long without an answer
 // fetch() over the mirrors of an iptv-org URL: the first one to answer OK wins, the rest are
 // cancelled. A host that fails at once hands over immediately; one that hangs is overtaken.
@@ -256,12 +274,20 @@ function parseM3U(text) {
       const [urlPart, opts = ''] = line.split('|'); // Kodi style: url|User-Agent=…&Referer=…
       const url = urlPart.trim();
       if (!/^(https?|rtmp|rtsp|udp):\/\//i.test(url) && !url.includes('/')) { cur = null; continue; }
+      // YouTube pages aren't streams; no web player can play them (Free-TV lists some).
+      if (/^https?:\/\/(www\.|m\.)?(youtube\.com|youtu\.be)\//i.test(url)) { cur = null; continue; }
       const ua = cur?.ua || (opts.match(/user-agent=([^&]*)/i) || [])[1] || '';
       const ref = cur?.ref || (opts.match(/referr?er=([^&]*)/i) || [])[1] || '';
+      let cc = normCountry(splitList(cur?.cc)[0]);
+      // Some lists (Free-TV) group by country ("Italy", "USA"); the Country filter already covers
+      // that, so such a group becomes the channel's country instead.
+      let group = cur?.group || '';
+      const gcc = countryFromName(group);
+      if (gcc) { cc = cc || gcc; group = ''; }
       out.push({
         name: cur?.name || url.split('/').pop() || 'Unnamed',
         logo: cur?.logo || '',
-        group: cur?.group || 'Ungrouped',
+        group: group || 'Ungrouped',
         id: cur?.id || '',
         url,
         hdr: needsHeaders(ua, ref),
@@ -269,7 +295,7 @@ function parseM3U(text) {
         geo: /\[geo[- ]?blocked\]/i.test(cur?.name || ''),
         part: /\[not 24\/7\]/i.test(cur?.name || ''),
         langs: splitList(cur?.lang).map(l => l.toLowerCase()),
-        cc: normCountry(splitList(cur?.cc)[0]),
+        cc,
       });
       cur = null;
     }
@@ -287,6 +313,30 @@ const regionNames = (() => { try { return new Intl.DisplayNames(['en'], { type: 
 function countryName(cc) {
   const iso = cc === 'uk' ? 'GB' : cc.toUpperCase();
   try { return regionNames?.of(iso) || iso; } catch { return iso; }
+}
+// "Italy", "USA", "Czech Republic", "日本 / Japan" -> two-letter code; '' when it isn't a country.
+const COUNTRY_ALIASES = { usa: 'us', uk: 'uk', korea: 'kr', 'czech republic': 'cz', macau: 'mo', trinidad: 'tt',
+  turkey: 'tr', 'hong kong': 'hk', russia: 'ru', iran: 'ir', 'ivory coast': 'ci', burma: 'mm', vatican: 'va' };
+let countryNames = null;
+function countryFromName(name) {
+  const norm = v => v.toLowerCase().replace(/&/g, 'and').replace(/[^\p{L}]+/gu, ' ').trim();
+  if (!name || name.length > 40) return '';
+  if (!countryNames) {
+    countryNames = new Map(Object.entries(COUNTRY_ALIASES));
+    if (regionNames) {
+      for (let a = 65; a <= 90; a++) for (let b = 65; b <= 90; b++) {
+        const iso = String.fromCharCode(a, b);
+        let n;
+        try { n = regionNames.of(iso); } catch { continue; }
+        if (n && n !== iso && !/unknown/i.test(n)) countryNames.set(norm(n), normCountry(iso));
+      }
+    }
+  }
+  for (const part of name.split('/')) {
+    const cc = countryNames.get(norm(part));
+    if (cc) return cc;
+  }
+  return '';
 }
 const countryFlag = cc => (cc ? [...(cc === 'uk' ? 'gb' : cc).toUpperCase()].map(c => String.fromCodePoint(0x1f1a5 + c.charCodeAt(0))).join('') : '');
 // Warnings from the playlist: all sources geo-blocked / all sources part-time.
@@ -400,6 +450,7 @@ function mergeChannels(entries) {
       if (cn && cn.length < ch.name.length) ch.name = cn;
       const groups = new Set(groupsOf(ch));
       for (const g of e.group.split(';')) if (g.trim()) groups.add(g.trim());
+      if (groups.size > 1) groups.delete('Ungrouped'); // a list that has no group for it shouldn't add one
       ch.group = [...groups].join(';');
     }
     if (!ch.country) ch.country = e.cc || countryFromId(e.id);
@@ -776,7 +827,7 @@ function renderList() {
       : !S.playlists.length
       ? S.loadError
         ? `<div class="empty">Couldn’t download the channel list.<br><small>${esc(S.loadError)}</small><br>Retrying automatically… <button class="primary" data-act="seed">Retry now</button> <button data-act="add">+ Add your own</button></div>`
-        : '<div class="empty">No playlist yet.<br><button class="primary" data-act="seed">Load iptv-org (all channels)</button> <button data-act="add">+ Add your own</button></div>'
+        : '<div class="empty">No playlist yet.<br><button class="primary" data-act="seed">Load all channels</button> <button data-act="add">+ Add your own</button></div>'
       : S.ui.status === 'fav' && !S.favs.size
         ? '<div class="empty">No favorites yet.<br>Tap ☆ next to a channel to save it here.</div>'
         : S.ui.status === 'recent' && !S.recent.length
@@ -1593,7 +1644,7 @@ function toggleFav(ch) {
 /* =========================================================================
    Playlists
    ========================================================================= */
-async function fetchPlaylist(url) {
+async function fetchOne(url) {
   try {
     const r = await fetchAny(effectiveUrl(url), { cache: 'no-store' });
     return await r.text();
@@ -1601,7 +1652,19 @@ async function fetchPlaylist(url) {
     throw new Error(`Couldn’t download the playlist (${e.message}). The server may block browsers: download the .m3u file and upload it instead.`);
   }
 }
+// Several lists (separated by spaces) are downloaded together and joined, in order. If some fail,
+// the rest are used, unless `all` is set (background refresh: better the saved copy than half a list).
+async function fetchPlaylist(url, { all = false } = {}) {
+  const urls = splitUrls(url);
+  if (urls.length < 2) return fetchOne(urls[0] || url);
+  const res = await Promise.allSettled(urls.map(fetchOne));
+  const ok = res.filter(r => r.status === 'fulfilled').map(r => r.value);
+  if (!ok.length || (all && ok.length < urls.length)) throw res.find(r => r.status === 'rejected').reason;
+  if (ok.length < urls.length) toast(`${urls.length - ok.length} of ${urls.length} lists didn’t download; using the rest`);
+  return ok.join('\n');
+}
 function nameFromUrl(url) {
+  url = splitUrls(url)[0] || '';
   try { return decodeURIComponent(new URL(url).pathname.split('/').pop() || new URL(url).hostname).replace(/\.m3u8?$/i, ''); }
   catch { return ''; }
 }
@@ -1692,7 +1755,7 @@ async function backgroundRefresh(p) {
   if (!p?.url || refreshing.has(p.id) || Date.now() - (p.updatedAt || p.addedAt || 0) < REFRESH_AFTER) return;
   refreshing.add(p.id);
   try {
-    const text = await fetchPlaylist(p.url);
+    const text = await fetchPlaylist(p.url, { all: true });
     const chs = buildChannels(text);
     if (!chs.length) return;
     await savePlaylistText(p, text, chs);
@@ -1714,7 +1777,7 @@ async function deletePlaylist() {
   const p = S.playlists.find(x => x.id === S.ui.currentId);
   if (!p || !confirm(`Remove playlist “${p.name}”? Your favorites and ratings are kept.`)) return;
   await DB.del('kv', 'pl:' + p.id);
-  if (p.url === DEFAULT_PLAYLIST.url) { S.ui.removedDefault = true; saveUi(); }
+  if (isDefaultList(p.url)) { S.ui.removedDefault = true; saveUi(); }
   S.playlists = S.playlists.filter(x => x !== p);
   await DB.put('kv', S.playlists, 'playlists');
   await selectPlaylist(S.playlists[0]?.id || null);
@@ -1884,7 +1947,7 @@ function wire() {
     const opt = e.target.selectedOptions[0];
     if (!opt.value) return;
     $('#plUrl').value = opt.value;
-    $('#plName').value = 'iptv-org: ' + opt.textContent.trim();
+    $('#plName').value = opt.dataset.name || 'iptv-org: ' + opt.textContent.trim();
   });
 
   $('#settingsBtn').addEventListener('click', openSettings);
@@ -2001,6 +2064,13 @@ async function init() {
   ]);
   S.recent = recentList || [];
   S.playlists = pls || [];
+  // The automatic list used to be iptv-org alone: add Free-TV to it, downloaded on the next refresh.
+  for (const p of S.playlists) {
+    if (p.url === OLD_DEFAULT.url && p.name === OLD_DEFAULT.name) {
+      Object.assign(p, { url: DEFAULT_PLAYLIST.url, name: DEFAULT_PLAYLIST.name, updatedAt: 1 }); // 1: long ago, so it refreshes now
+      DB.put('kv', S.playlists, 'playlists');
+    }
+  }
   S.settings = { ...DEFAULT_SETTINGS, ...(settings || {}) };
   S.ui = { ...S.ui, ...(ui || {}) };
   const recent = Date.now() - 24 * 3600e3;

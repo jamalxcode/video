@@ -134,15 +134,17 @@
 <dialog id="addDlg">
   <form method="dialog" id="addForm">
     <h3>Add playlist</h3>
-    <label for="plPreset">Quick add from <a href="https://github.com/iptv-org/iptv" target="_blank" rel="noopener">iptv-org</a></label>
+    <label for="plPreset">Quick add from <a href="https://github.com/iptv-org/iptv" target="_blank" rel="noopener">iptv-org</a> or <a href="https://github.com/Free-TV/IPTV" target="_blank" rel="noopener">Free-TV</a></label>
     <select id="plPreset">
       <option value="">Choose a list…</option>
-      <option value="https://iptv-org.github.io/iptv/index.m3u">🌐 All channels</option>
+      <option value="https://iptv-org.github.io/iptv/index.m3u https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8" data-name="All channels (iptv-org + Free-TV)">🌍 Everything: iptv-org + Free-TV</option>
+      <option value="https://iptv-org.github.io/iptv/index.m3u">🌐 iptv-org: all channels</option>
+      <option value="https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8" data-name="Free-TV">📺 Free-TV: hand-picked free channels</option>
     </select>
     <label for="plName">Name (optional)</label>
     <input id="plName" type="text" placeholder="My channels">
     <label for="plUrl">Playlist URL</label>
-    <input id="plUrl" type="url" placeholder="https://example.com/playlist.m3u">
+    <input id="plUrl" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://example.com/playlist.m3u (several: separate with spaces)">
     <label for="plFile">…or upload a file</label>
     <input id="plFile" type="file" accept=".m3u,.m3u8,.txt,audio/x-mpegurl,application/vnd.apple.mpegurl,text/plain">
     <label for="plText">…or paste the playlist text</label>
