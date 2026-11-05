@@ -3,8 +3,9 @@
    Streams, iptv-org and its mirrors are never cached.
      page (index.html)   network first, cached copy when offline
      app files           cached copy first, refreshed in the background
-     player libraries    cached once from the CDN */
-const CACHE = 'video-shell-v5';
+     player libraries    cached once from the CDN
+     lists/ (Free-TV copy) never cached here; the player saves playlists itself */
+const CACHE = 'video-shell-v6';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'favicon.svg', 'favicon-48.png', 'apple-touch-icon.png'];
 const LIBS = /^https:\/\/(cdn\.jsdelivr\.net\/npm\/(hls\.js|mpegts\.js|country-flag-emoji-polyfill)|fonts\.(googleapis|gstatic)\.com)/;
 
@@ -23,6 +24,7 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (isPage(req)) return e.respondWith(networkFirst(req));
+  if (sameOrigin(url) && url.pathname.includes('/lists/')) return; // channel lists: always fresh from the network
   if (sameOrigin(url)) return e.respondWith(staleWhileRevalidate(req));
   if (LIBS.test(req.url)) return e.respondWith(cacheFirst(req));
   // everything else (streams, iptv-org, mirrors): straight to the network

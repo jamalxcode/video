@@ -1,0 +1,44 @@
+# Keeps lists/free-tv.m3u8 in step with https://github.com/Free-TV/IPTV.
+# The player loads Free-TV from this copy first: it's on the same site as the player, so it
+# works on networks that block raw.githubusercontent.com, and jsDelivr can't serve Free-TV
+# (its repo is over jsDelivr's 50 MB limit).
+name: Refresh Free-TV copy
+
+on:
+  schedule:
+    - cron: '17 4 * * *'   # daily
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the Free-TV playlist
+        run: |
+          curl -fsSL --retry 3 -o /tmp/free-tv.m3u8 https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8
+          # Only accept something that looks like the real list, so a bad download never replaces a good copy.
+          head -c 7 /tmp/free-tv.m3u8 | grep -q '#EXTM3U'
+          n=$(grep -c '#EXTINF' /tmp/free-tv.m3u8)
+          echo "channels: $n"
+          [ "$n" -ge 500 ]
+          mkdir -p lists
+          cp /tmp/free-tv.m3u8 lists/free-tv.m3u8
+
+      - name: Commit if it changed, then publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git diff --quiet -- lists/free-tv.m3u8 && { echo "No change"; exit 0; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lists/free-tv.m3u8
+          git commit -m "Free-TV copy refreshed"
+          git push
+          # Pushes made by this workflow don't start a Pages build by themselves.
+          gh api -X POST "repos/${{ github.repository }}/pages/builds" || true

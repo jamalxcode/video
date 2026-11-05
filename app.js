@@ -169,7 +169,12 @@ const RAW_MIRRORS = [
   'https://gcore.jsdelivr.net/gh/$1/$2@$3/',
   'https://rawcdn.githack.com/$1/$2/$3/',
 ];
+// Free-TV's repo is over jsDelivr's 50 MB limit, so jsDelivr can't serve it. This site keeps its own
+// copy instead (lists/free-tv.m3u8, refreshed daily by .github/workflows/free-tv.yml): same site,
+// so it loads wherever the player itself loads. It's tried first; GitHub is the fallback.
+const FREE_TV_COPY = new URL('lists/free-tv.m3u8', location.href).href;
 const mirrorUrls = url => (IPTV_RE.test(url) ? [url, ...IPTV_MIRRORS.map(to => url.replace(IPTV_RE, to))]
+  : url === FREE_TV ? [FREE_TV_COPY, url, url.replace(RAW_RE, RAW_MIRRORS[3])]
   : RAW_RE.test(url) ? [url, ...RAW_MIRRORS.map(to => url.replace(RAW_RE, to))] : [url]);
 const MIRROR_STAGGER = 3000; // start the next mirror after this long without an answer
 // fetch() over the mirrors of an iptv-org URL: the first one to answer OK wins, the rest are
