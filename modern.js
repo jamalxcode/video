@@ -144,8 +144,7 @@ window.Modern = (() => {
       : { ...e, n: pool.filter(ch => keysOf(ch).some(k => e.keys.includes(k))).length }));
     const inL = all.filter(inLang), inLC = inL.filter(inCountry);
     const lCol = `<div class="m-column"><h3>Languages <small>${langs.size}</small></h3>` + pick('lang', lang, '', 'All languages') +
-      recount(mergeSmall(lSorted.map(([l, n]) => ({ key: l, n, label: lLabel(l) }))), all, langsFor).map(e => merged('lang', lang, e,
-        (l, n) => pick('lang', lang, l, safe(lLabel(l)), n))).join('') + '</div>';
+      lSorted.map(([l, n]) => pick('lang', lang, l, safe(lLabel(l)), n)).join('') + '</div>'; // every language on its own row
     const ccCol = `<div class="m-column"><h3>Countries <small>${countries.size}</small></h3>` + pick('country', country, '', 'All countries') +
       recount(mergeSmall(ccSorted.map(([cc, n]) => ({ key: cc, n, label: ccLabel(cc) }))), inL, ch => [ccOf(ch)]).map(e => merged('country', country, e,
         (cc, n) => pick('country', country, cc, (cc === '__other__' ? '' : countryFlag(cc) + ' ') + safe(ccLabel(cc)), n))).join('') + '</div>';
