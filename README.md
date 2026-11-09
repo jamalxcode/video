@@ -41,6 +41,7 @@ The layout and channel picker follow [radio.sala.company](https://radio.sala.com
 - **Remembers volume** and mute between channels and visits.
 - **Auto-skip** (in Settings): jumps to the next working channel when one fails or times out.
 - **Sleep timer**: the sleep selector (or `S`, which adds 30 minutes at a time up to 3 hours, then off). At the end the sound fades out over 10 seconds and the channel stops, with a button to resume.
+- **Lock screen and AirPlay remote**: the channel's name and logo show in Control Center and on the lock screen, with play/pause and next/previous channel (where the browser supports it).
 - **Keyboard / TV remote**: ↑↓ or ←→ previous/next channel, type a channel number to jump, `S` sleep timer, Space pause, Esc closes the menu or picker.
 - **Retro picture**: scanlines and static between channels can be switched off in Settings.
 

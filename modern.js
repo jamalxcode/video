@@ -291,6 +291,7 @@ window.Modern = (() => {
     $m('mPlay').disabled = !ch;
     if (document.activeElement !== $m('mVolume')) $m('mVolume').value = Math.round((video.muted ? 0 : video.volume) * 100);
     paintSleep();
+    paintMediaSession();
   }
   // "Source 1 of 2 · HLS · 720p"
   function liveDetail() {
@@ -318,6 +319,24 @@ window.Modern = (() => {
       if (sel && sel.textContent !== text) sel.textContent = text;
     }
   }
+  // Lock screen, Control Center and AirPlay remote: the channel's name and logo, play/pause, next/previous.
+  let mediaKey = '';
+  function paintMediaSession() {
+    const ms = navigator.mediaSession, ch = S.current;
+    if (!ms || !ch || mediaKey === ch.key) return;
+    mediaKey = ch.key;
+    try {
+      ms.metadata = new MediaMetadata({ title: ch.name, artist: [countryOf(ch) ? countryName(countryOf(ch)) : '', groupLabel(ch)].filter(Boolean).join(' · '),
+        album: 'video.sala.company', artwork: ch.logo ? [{ src: ch.logo }] : [] });
+    } catch { /* older browsers */ }
+  }
+  if (navigator.mediaSession) {
+    const on = (action, fn) => { try { navigator.mediaSession.setActionHandler(action, fn); } catch { /* not supported */ } };
+    on('play', () => { if (liveState() !== 'live') playPause(); });
+    on('pause', () => { if (liveState() === 'live') video.pause(); });
+    on('nexttrack', () => step(1));
+    on('previoustrack', () => step(-1));
+  }
   function playPause() {
     const ch = S.current;
     if (!ch) return;
@@ -335,7 +354,7 @@ window.Modern = (() => {
   }
   function refresh() {
     paintLive(); paintPresets(); paintRecent();
-    const sig = [view, country, genre, query, S.ui.currentId, S.channels.length, S.playlists.length, S.recent.length,
+    const sig = [view, country, genre, query, S.ui.currentId, S.channels.length, S.playlists.length, S.recent.length, S.recent[0]?.key,
       S.health.size, T.done, T.active, T.queue.length, S.rev, S.current?.key, S.loading, S.loadError].join('|');
     if (sig !== drawnSig) { drawnSig = sig; draw(); }
     const prog = progressText();
@@ -432,11 +451,12 @@ window.Modern = (() => {
     if (browserOpen) fitMergedNames();
   });
 
+  for (const ev of ['playing', 'pause', 'waiting']) video.addEventListener(ev, () => paintLive());
   root.classList.toggle('m-browser-open', browserOpen);
   $m('mChannelToggle').setAttribute('aria-expanded', String(browserOpen));
   syncInert();
   setInterval(() => { if (!document.hidden) refresh(); }, 900);
   refresh();
   // app.js calls sync() whenever the channels or their order change.
-  return { refresh, openBrowser, sync() { drawnSig = ''; refresh(); } };
+  return { refresh, openBrowser, live: () => paintLive(), sync() { drawnSig = ''; refresh(); } };
 })();

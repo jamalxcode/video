@@ -1038,7 +1038,7 @@ const TV = (() => {
   const osdChannel = ch => osdShow(`CH ${chNum(ch)}<small>${esc(ch.name)}</small>`);
   const api = {
     state: 'standby', // standby | tuning | live | buffering | nosignal — shown on the VCR display
-    setState(s) { api.state = s; VFD.update(); },
+    setState(s) { api.state = s; VFD.update(); window.Modern?.live(); },
     idle() { snow(false); card.classList.remove('hidden'); api.setState('standby'); },
     tune(ch) {
       card.classList.add('hidden');
@@ -1089,6 +1089,7 @@ const VFD = (() => {
   // 8-segment buffer meter drawn as small blocks: one segment per 4 seconds loaded ahead.
   const bufMeter = full => `<i class="bufm" aria-hidden="true">${Array.from({ length: 8 }, (_, i) => `<b${i < full ? '' : ' class="off"'}></b>`).join('')}</i>`;
   function update() {
+    if (MODERN) return; // the VCR display isn't shown on the modern screen
     const ch = S.current;
     const s = session && ch && session.ch.key === ch.key ? session : null;
     const [stateText, stateCls] = STATE[TV.state] || STATE.standby;
