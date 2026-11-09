@@ -233,7 +233,11 @@ const S = {
   current: null,
   loading: '',          // message shown in the list while a playlist downloads
   loadError: '',        // why the automatic channel-list download failed (shown while retrying)
+  note: '',             // why the channel on now couldn't play (shown on the connection panel)
+  rev: 0,               // counts every change the screen should redraw for (modern.js watches it)
 };
+// The screen is modern.js; the older guide, filters and VCR display (still in the page, hidden) stay idle.
+const MODERN = document.body.classList.contains('modern-ui');
 const saveUi = () => DB.put('kv', { ...S.ui }, 'ui');
 
 /* =========================================================================
@@ -798,7 +802,7 @@ function testUrlsFor(channels) {
   return urls;
 }
 function autoTestVisible() {
-  if (!S.settings.autoTest) return;
+  if (MODERN || !S.settings.autoTest) return; // modern.js checks the picker rows on screen instead
   const list = $('#list');
   const start = Math.floor(list.scrollTop / ROW);
   const end = Math.min(S.filtered.length, Math.ceil((list.scrollTop + listHeight()) / ROW));
@@ -814,6 +818,7 @@ const ROW = 58; // room for a two-line channel name plus the status line
 const listHeight = () => $('#list').clientHeight || window.innerHeight || 800;
 let renderPending = false;
 function scheduleRender() {
+  S.rev++;
   if (renderPending) return;
   renderPending = true;
   const go = () => { if (renderPending) { renderPending = false; renderList(); } };
@@ -821,6 +826,7 @@ function scheduleRender() {
   setTimeout(go, 100); // rAF doesn't fire in background tabs
 }
 function renderList() {
+  if (MODERN) return;
   const list = $('#list');
   const inner = $('#listInner');
   const n = S.filtered.length;
@@ -904,6 +910,7 @@ function sourceChannels() {
 }
 // Group and country menus, with counts for what the current list holds.
 function rebuildGroups() {
+  if (MODERN) return;
   const src = sourceChannels();
   const counts = new Map();
   const countries = new Map();
@@ -932,6 +939,8 @@ function rebuildGroups() {
     ccs.map(([cc, name]) => `<option value="${cc}"${cc === S.ui.country ? ' selected' : ''}>${countryFlag(cc)} ${esc(name)} (${countries.get(cc)})</option>`).join('');
 }
 function applyFilters(keepScroll = false) {
+  // The channel picker decides what's listed (and so what next / previous step through).
+  if (MODERN) { S.rev++; window.Modern?.sync(); return; }
   const q = S.ui.search.toLowerCase().trim();
   const g = S.ui.group;
   const cc = S.ui.country;
@@ -1136,7 +1145,7 @@ const Sleep = (() => {
     const s = Math.max(0, Math.ceil(ms / 1000)), h = Math.floor(s / 3600);
     return h ? `${h}:${two(Math.floor(s / 60) % 60)}:${two(s % 60)}` : `${Math.floor(s / 60)}:${two(s % 60)}`;
   }
-  const words = min => (min < 60 ? `${min} min` : `${Math.floor(min / 60)} h${min % 60 ? ' 30 min' : ''}`);
+  const words = min => (min < 60 ? `${min} min` : `${Math.floor(min / 60)} h${min % 60 ? ` ${min % 60} min` : ''}`);
   function render() {
     const on = endsAt > 0;
     lbl.textContent = on ? fmt(endsAt - Date.now()) : 'SLEEP';
@@ -1190,9 +1199,24 @@ const Sleep = (() => {
     toast(`Sleep timer: sound off in ${words(min)}`);
     TV.osdShow(`☾ SLEEP<small>${fmt(min * 60000)}</small>`, 2000);
   }
+  // The sleep selector: a number of minutes, or 0 for off.
+  function set(min) {
+    if (!min) { if (endsAt) { stop(); toast('Sleep timer off'); } return; }
+    restoreVolume();
+    step = Math.max(0, STEPS.findIndex(m => m >= min));
+    endsAt = Date.now() + min * 60000;
+    clearInterval(timer);
+    timer = setInterval(tick, 250);
+    render();
+    VFD.update();
+    toast(`Sleep timer: sound off in ${words(min)}`);
+    TV.osdShow(`☾ SLEEP<small>${fmt(min * 60000)}</small>`, 2000);
+  }
   btn.addEventListener('click', cycle);
   return {
     cycle,
+    set,
+    at: () => endsAt,
     stop,
     active: () => endsAt > 0,
     left: () => fmt(endsAt - Date.now()),
@@ -1279,6 +1303,7 @@ function nextSource() {
   teardown();
   const token = ++playToken;
   Object.assign(s, { url: s.order[s.idx].url, t0: performance.now(), started: false, failed: false, recorded: false, stalls: 0, token });
+  S.note = s.idx ? `Trying backup source ${s.idx + 1} of ${s.order.length}…` : '';
   renderNow();
   TV.tune(s.ch);
   showOverlay('<div class="spinner"></div>' + (s.idx ? `Trying backup source ${s.idx + 1} of ${s.order.length}…` : 'Tuning…'));
@@ -1371,6 +1396,7 @@ function onTimeout(token) {
     return;
   }
   if (S.settings.autoSkip) return onPlayFail(`Didn’t start within ${S.settings.timeoutSec}s`);
+  S.note = `Still loading after ${S.settings.timeoutSec}s: slow or offline right now`;
   showOverlay(`<b>⏳ Still loading after ${S.settings.timeoutSec}s</b><div class="muted">This channel is slow or offline right now.</div>`,
     [['wait', 'Keep waiting'], ['next', 'Next channel'], ['broken', 'Mark broken & skip']]);
 }
@@ -1379,6 +1405,7 @@ function onPlayFail(msg) {
   const s = session;
   if (!s || s.failed) return;
   s.failed = true;
+  S.note = msg;
   clearTimeout(startTimer);
   recordFail(s, msg, !s.started);
   teardown();
@@ -1393,6 +1420,16 @@ function onPlayFail(msg) {
   showOverlay(`<b>NO SIGNAL</b><div>Couldn’t play this channel${tried}</div><div class="muted">${esc(msg)}</div>`,
     [['next', 'Next channel'], ['retry', 'Retry'], ['copy', 'Copy link for VLC']]);
 }
+
+// Stop: the Play/Pause button while a channel is still tuning or buffering.
+function stopChannel() {
+  leaveSession();
+  teardown();
+  hideOverlay();
+  TV.idle();
+  scheduleRender();
+}
+const isPlaying = () => !!session?.started && !video.paused;
 
 // Leaving a source that never started counts as a failure if we waited long enough.
 function leaveSession() {
@@ -1632,6 +1669,28 @@ const Share = (() => {
   return { shareFavorites, shareList, receive };
 })();
 
+// Presets: 18 saved channels on the main screen (saved copies, so they work from any playlist).
+const PRESET_SLOTS = 18;
+const Presets = (() => {
+  let list = Array(PRESET_SLOTS).fill(null);
+  const norm = p => Array.from({ length: PRESET_SLOTS }, (_, i) => (p?.[i]?.key && p[i].sources ? p[i] : null));
+  return {
+    all: () => list,
+    load(p) { list = norm(p); },
+    set(p) { list = norm(p); DB.put('kv', list, 'presets'); scheduleRender(); },
+    // Put channels into the empty slots, in order, skipping ones already saved.
+    fill(chs) {
+      const next = list.slice();
+      for (const ch of chs) {
+        if (next.some(p => p?.key === ch.key)) continue;
+        const i = next.indexOf(null);
+        if (i < 0) break;
+        next[i] = { key: ch.key, name: ch.name, logo: ch.logo, group: ch.group, country: ch.country || '', sources: ch.sources };
+      }
+      this.set(next);
+    },
+  };
+})();
 const favRecord = ch => ({ key: ch.key, name: ch.name, logo: ch.logo, group: ch.group, country: countryOf(ch), sources: ch.sources, addedAt: Date.now() });
 function toggleFav(ch) {
   if (S.favs.has(ch.key)) {
@@ -1680,6 +1739,7 @@ function renderPlaylists() {
     : '<option value="">No playlists yet</option>';
   const cur = S.playlists.find(p => p.id === S.ui.currentId);
   $('#refreshPlaylistBtn').disabled = !cur?.url;
+  $('#curListName').textContent = cur ? `Open: ${cur.name} (${cur.count} channels)` : 'No playlist open';
   $('#deletePlaylistBtn').disabled = !cur;
 }
 // Install a channel list: lookup maps, favorites kept in sync with the newest sources.
@@ -1794,7 +1854,7 @@ async function deletePlaylist() {
 async function exportData() {
   const data = {
     app: 'm3u-player', version: 2, exportedAt: new Date().toISOString(),
-    settings: S.settings, favs: [...S.favs.values()], health: [...S.health.values()], recent: S.recent, playlists: [],
+    settings: S.settings, favs: [...S.favs.values()], presets: Presets.all(), health: [...S.health.values()], recent: S.recent, playlists: [],
   };
   for (const p of S.playlists) data.playlists.push({ ...p, text: await DB.get('kv', 'pl:' + p.id) });
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
@@ -1811,6 +1871,7 @@ async function importData(file) {
     if (data.settings) { S.settings = { ...DEFAULT_SETTINGS, ...data.settings }; await DB.put('kv', S.settings, 'settings'); }
     for (const old of data.favs || []) { const f = upgradeFav(old); S.favs.set(f.key, f); await DB.put('favs', f); }
     for (const h of data.health || []) { S.health.set(h.url, h); await DB.put('health', h); }
+    if (Array.isArray(data.presets)) Presets.fill(data.presets.filter(p => p?.key && p.sources)); // into empty slots
     if (data.recent?.length) {
       const seen = new Set(S.recent.map(r => r.key));
       S.recent = [...S.recent, ...data.recent.filter(r => !seen.has(r.key))].slice(0, RECENT_MAX);
@@ -1841,7 +1902,7 @@ async function clearStats() {
   toast('Test history cleared');
 }
 async function eraseAll() {
-  if (!confirm('Erase all playlists, favorites, ratings and settings from this browser?')) return;
+  if (!confirm('Erase all playlists, presets, favorites, ratings and settings from this browser?')) return;
   await Promise.all(['kv', 'health', 'favs'].map(s => DB.clear(s)));
   location.reload();
 }
@@ -2013,6 +2074,9 @@ function wire() {
     const k = e.key;
     if (/^[0-9]$/.test(k)) return typeChannelDigit(k);
     const handled = () => e.preventDefault();
+    // The modern screen has no highlighted guide row: ↑ ↓ change channel like a remote, Esc is modern.js's.
+    if (MODERN && ['ArrowDown', 'ArrowUp'].includes(k)) { handled(); step(k === 'ArrowDown' ? 1 : -1); return; }
+    if (MODERN && ['PageDown', 'PageUp', 'Home', 'End', 'Enter', 'Escape'].includes(k)) return;
     if (k === 'ArrowDown' || k === 'ArrowUp') { handled(); const c = cursorStart(); moveCursor(c < 0 ? 0 : c + (k === 'ArrowDown' ? 1 : -1)); }
     else if (k === 'PageDown' || k === 'PageUp') { handled(); moveCursor(Math.max(0, cursorStart()) + (k === 'PageDown' ? 1 : -1) * pageRows()); }
     else if (k === 'Home' || k === 'End') { handled(); moveCursor(k === 'Home' ? 0 : S.filtered.length - 1); }
@@ -2084,6 +2148,13 @@ async function init() {
     if (h.probe && !h.probe.inferred && h.probe.at > recent) noteHost(h.url, h.probe);
   }
   for (const f of favs || []) S.favs.set(f.key, f);
+  Presets.load(await DB.get('kv', 'presets'));
+  // First visit with presets: start them off with your favorites (the favorites stay too).
+  if (!S.ui.favsToPresets) {
+    S.ui.favsToPresets = true;
+    saveUi();
+    if (S.favs.size) Presets.fill([...S.favs.values()].sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0)));
+  }
   $('#search').value = S.ui.search;
   const vol = Number(S.ui.volume ?? 1);
   video.volume = Number.isFinite(vol) ? Math.min(1, Math.max(0, vol)) : 1;

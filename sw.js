@@ -5,8 +5,8 @@
      app files           cached copy first, refreshed in the background
      player libraries    cached once from the CDN
      lists/ (Free-TV copy) never cached here; the player saves playlists itself */
-const CACHE = 'video-shell-v6';
-const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'favicon.svg', 'favicon-48.png', 'apple-touch-icon.png'];
+const CACHE = 'video-shell-v7';
+const SHELL = ['./', 'index.html', 'modern.css', 'app.js', 'modern.js', 'favicon.svg', 'favicon-48.png', 'apple-touch-icon.png'];
 const LIBS = /^https:\/\/(cdn\.jsdelivr\.net\/npm\/(hls\.js|mpegts\.js|country-flag-emoji-polyfill)|fonts\.(googleapis|gstatic)\.com)/;
 
 self.addEventListener('install', e => {
