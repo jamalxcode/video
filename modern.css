@@ -314,12 +314,10 @@ body.modern-ui .toast{position:fixed;left:50%;transform:translateX(-50%);max-wid
   #modernApp .overlay{font-size:18px;padding:8px 10px}#modernApp .overlay b{font-size:21px}#modernApp .overlay .muted{font-size:16px}
   #modernApp .overlay .acts button{font-size:17px}
 }
-/* Now playing: favorite star beside Play, channel up / down, details */
+/* Now playing: channel up / down, details */
 #modernApp .m-now{padding:16px 0 14px}
 #modernApp .m-now-logo{width:72px;height:72px;font-size:28px;color:#b8e1fa}
 #modernApp .m-now-logo .m-fallback{font-size:26px}
-#modernApp .m-fav{flex:none;width:48px;height:48px;border-radius:50%!important;border:1px solid #64849e!important;background:#263c50!important;font-size:24px!important;color:#dfe8f1!important;display:grid!important;place-items:center}
-#modernApp .m-fav.on{color:#ffd76a!important;border-color:#d4dce4!important;background:#415f77!important}
 #modernApp .m-zap{display:flex;gap:6px}
 #modernApp .m-zap button{min-height:43px;padding:8px 14px!important;border-radius:12px!important;background:#263c50!important;border:1px solid #64849e!important;font-weight:700!important;font-size:13px!important;color:#f5faff!important}
 #modernApp .m-zap button span{font-size:11px;color:#bdcbd9;letter-spacing:.08em}
@@ -348,7 +346,6 @@ body.modern-ui .toast{position:fixed;left:50%;transform:translateX(-50%);max-wid
   #modernApp .m-now{gap:9px;padding:12px 0 11px}
   #modernApp .m-now-logo{width:46px;height:46px;border-radius:11px}
   #modernApp .m-now h1{font-size:18px}
-  #modernApp .m-fav{width:42px;height:42px;font-size:20px!important}
   #modernApp .m-zap button{padding:8px 11px!important}
   #modernApp .m-st-select .m-fallback{width:27px;height:27px;min-width:27px}
 }

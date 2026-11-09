@@ -8,14 +8,14 @@ A browser-based player for M3U / M3U8 IPTV playlists. It's a static site, so it 
 
 The layout and channel picker follow [radio.sala.company](https://radio.sala.company) (navy, brushed-metal panels), with the retro TV picture kept: test card when idle, static between channels, the green on-screen channel number and the cable-guide style messages.
 
-- **Now playing:** the TV picture, then the channel with its flag, number, country, genre and language, a ☆ favorite button and a large Play/Pause button. Below it the real connection status ("Connecting…", "Connected · On air · Source 1 of 2 · HLS · 720p", "No signal" with the reason and a Retry button).
+- **Now playing:** the TV picture, then the channel with its flag, number, country, genre and language, and a large Play/Pause button. Below it the real connection status ("Connecting…", "Connected · On air · Source 1 of 2 · HLS · 720p", "No signal" with the reason and a Retry button).
 - **Sleep, channel up/down and volume:** one sleep selector (15 minutes to 3 hours, with a live countdown and **Sleep Off**; at zero the sound fades out), ◀ CH / CH ▶ buttons, and a volume slider (not on phones, where the phone's own buttons work).
 - **Channel details, sources and rating:** pick a channel's source by hand, rate it (Smooth / Buffers / Broken), test it, copy its link for VLC, and see its play and test history.
-- **Presets:** 18 slots with channel logos. Tap to play; long-press (or Shift+Enter) saves the channel that's on. Only the slot you picked is highlighted, even if a channel is saved twice. On the first visit after the change, your favorites fill the empty slots (they stay in Favorites too).
+- **Presets:** 18 slots with channel logos. Tap to play; long-press (or Shift+Enter) saves the channel that's on. Only the slot you picked is highlighted, even if a channel is saved twice. Presets replace favorites: saved favorites moved once into the empty slots, and favorites in old backups and old share links do the same (any that don't fit are added as a playlist).
 - **Recently watched:** the last channels you actually watched.
-- **Channels** (the TV button, with a sweeping red scanner light): a Finder-style picker with Collections → Countries → Genres → Channels, all A–Z. Collections holds your playlists, ★ Favorites, ◷ Recently watched and ＋ Add playlist. Countries and genres with only 1–2 channels are merged into groups of six or more. Search matches channel names, countries, genres and languages. Channels on screen are checked quietly; a silver ✓ marks channels a real test or play showed working. Picking a channel plays it and returns to the TV; on phones the picker slides over the screen. *Test channels* checks everything listed. Next / previous channel follow what the picker lists.
-- **Menu (☰ on phones, a sidebar on wider screens):** Home, Favorites, Recently watched, Channel browser, Add playlist, Settings.
-- **Settings (⚙):** skip failed channels, retro screen effects, quiet checks, advanced timings; refresh, share or remove the open playlist; share favorites; backup export/import (presets included); clear test history; erase everything.
+- **Channels** (the TV button, with a sweeping red scanner light): a Finder-style picker with Collections → Countries → Genres → Channels, all A–Z. Collections holds your playlists, ◷ Recently watched and ＋ Add playlist. Countries and genres with only 1–2 channels are merged into groups of six or more. Search matches channel names, countries, genres and languages. Channels on screen are checked quietly; a silver ✓ marks channels a real test or play showed working. Picking a channel plays it and returns to the TV; on phones the picker slides over the screen. *Test channels* checks everything listed. Next / previous channel follow what the picker lists.
+- **Menu (☰ on phones, a sidebar on wider screens):** Home, Recently watched, Channel browser, Add playlist, Settings.
+- **Settings (⚙):** skip failed channels, retro screen effects, quiet checks, advanced timings; refresh, share or remove the open playlist; share presets; backup export/import (presets included); clear test history; erase everything.
 
 ## Features
 
@@ -34,27 +34,27 @@ The layout and channel picker follow [radio.sala.company](https://radio.sala.com
 - **Always current**: playlists added from a URL are quietly re-downloaded once a day.
 - **Learns from watching**: start time, failures and buffering are recorded every time you play a channel.
 - **Your own ratings**: 👍 Smooth / ⚠ Buffers / ✖ Broken. Your rating always beats test results.
-- **Favorites** (★) work across all your playlists.
+- **Presets** work across all your playlists.
 - **Country and language**: every channel shows its country flag before its name and its language(s) underneath (e.g. ARA·FRA). For iptv-org channels the country comes from the channel id and the language from iptv-org's channel data (refreshed every few days); other playlists can provide `tvg-country` and `tvg-language`. Flags use a small flags-only font so they also show on Windows.
 - **Playlist warnings**: channels iptv-org marks as geo-blocked or not on air 24/7 get GEO / PART-TIME tags, and those sources are tried last.
 - **Recently watched**: the last 40 channels you actually watched, from any playlist.
 - **Remembers volume** and mute between channels and visits.
 - **Auto-skip** (in Settings): jumps to the next working channel when one fails or times out.
 - **Sleep timer**: the sleep selector (or `S`, which adds 30 minutes at a time up to 3 hours, then off). At the end the sound fades out over 10 seconds and the channel stops, with a button to resume.
-- **Keyboard / TV remote**: ↑↓ or ←→ previous/next channel, type a channel number to jump, `F` favorite, `S` sleep timer, Space pause, Esc closes the menu or picker.
+- **Keyboard / TV remote**: ↑↓ or ←→ previous/next channel, type a channel number to jump, `S` sleep timer, Space pause, Esc closes the menu or picker.
 - **Retro picture**: scanlines and static between channels can be switched off in Settings.
 
 ## Share links
 
-Settings → **Share favorites** / **Share this playlist** makes a link (after the `#`, so nothing is sent to any server) that carries your favorite channels, or a playlist, to another phone or person; opening it offers to add them. Playlists from a URL share the URL; pasted or uploaded ones are carried in the link when they fit.
+Settings → **Share presets** / **Share this playlist** makes a link (after the `#`, so nothing is sent to any server) that carries your preset channels, or a playlist, to another phone or person; opening it offers to add them (presets go into empty preset slots). Playlists from a URL share the URL; pasted or uploaded ones are carried in the link when they fit.
 
 ## Works offline
 
-The app's own files are kept in the browser by a small service worker (`sw.js`), so the site opens instantly and still opens with no network, showing your playlists and favorites (streams need network). The page itself is fetched fresh when the network answers within 4 seconds, so updates arrive normally.
+The app's own files are kept in the browser by a small service worker (`sw.js`), so the site opens instantly and still opens with no network, showing your playlists and presets (streams need network). The page itself is fetched fresh when the network answers within 4 seconds, so updates arrive normally.
 
 ## Your data stays in your browser
 
-Playlists, favorites, ratings, test results and settings are stored in the browser's IndexedDB. Nothing is uploaded anywhere, so every person and every browser has its own separate list. To move your data to another device, use **⚙ → Export backup**, then **Import backup** on the other device.
+Playlists, presets, ratings, test results and settings are stored in the browser's IndexedDB. Nothing is uploaded anywhere, so every person and every browser has its own separate list. To move your data to another device, use **⚙ → Export backup**, then **Import backup** on the other device.
 
 ## Code
 

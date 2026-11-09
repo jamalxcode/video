@@ -1521,7 +1521,7 @@ function hideOverlay() { $('#overlay').classList.add('hidden'); }
 
 function renderNow() {
   const ch = S.current;
-  for (const b of document.querySelectorAll('.rate button, #favBtn, #prevBtn, #nextBtn')) b.disabled = !ch;
+  for (const b of document.querySelectorAll('.rate button, #prevBtn, #nextBtn')) b.disabled = !ch;
   if (!ch) return;
   const url = currentSourceUrl();
   const src = ch.sources.find(s => s.url === url) || ch.sources[0];
@@ -1534,10 +1534,6 @@ function renderNow() {
   const logo = $('#nowLogo');
   logo.classList.toggle('hidden', !ch.logo);
   if (ch.logo) { logo.src = ch.logo; logo.onerror = () => logo.classList.add('hidden'); }
-  const fav = S.favs.has(ch.key);
-  $('#favBtn b').textContent = fav ? '★' : '☆';
-  $('#favBtn').classList.toggle('on', fav);
-  $('#favBtn').setAttribute('aria-pressed', fav);
   for (const b of document.querySelectorAll('.rate [data-rate]')) {
     b.classList.toggle('on', !!b.dataset.rate && b.dataset.rate === (h?.rating || ''));
   }
@@ -1627,12 +1623,12 @@ const Share = (() => {
     try { await navigator.clipboard.writeText(url); toast(`Link copied: ${what}`); }
     catch { prompt('Copy this link:', url); }
   }
-  async function shareFavorites() {
-    const favs = [...S.favs.values()];
-    if (!favs.length) return toast('No favorites to share yet');
-    const payload = await pack({ t: 'fav', m3u: toM3u(favs) });
-    if (payload.length > MAX_CHARS) return toast('Too many favorites for one link. Use Export backup instead.');
-    offer(link(payload), `${favs.length} favorite channel${favs.length > 1 ? 's' : ''}`);
+  async function sharePresets() {
+    const list = Presets.all().filter(Boolean);
+    if (!list.length) return toast('No presets to share yet');
+    const payload = await pack({ t: 'presets', m3u: toM3u(list) });
+    if (payload.length > MAX_CHARS) return toast('These presets are too big for one link. Use Export backup instead.');
+    offer(link(payload), `${list.length} preset channel${list.length > 1 ? 's' : ''}`);
   }
   async function shareList() {
     const p = S.playlists.find(x => x.id === S.ui.currentId);
@@ -1649,24 +1645,25 @@ const Share = (() => {
     history.replaceState(null, '', location.pathname + location.search);
     let obj;
     try { obj = await unpack(m[1]); } catch { return toast('This share link is damaged'); }
-    if (obj.t === 'fav' && obj.m3u) {
+    // Shared presets (and favorites links from before presets): into your empty preset slots;
+    // whatever doesn't fit is added as a playlist, so nothing is lost.
+    if ((obj.t === 'presets' || obj.t === 'fav') && obj.m3u) {
       const chs = buildChannels(obj.m3u);
       if (!chs.length) return toast('The link had no channels');
-      if (!confirm(`Add ${chs.length} shared favorite channel${chs.length > 1 ? 's' : ''} to yours?`)) return;
-      let added = 0;
-      for (const ch of chs) {
-        if (S.favs.has(ch.key)) continue;
-        const f = favRecord(ch); S.favs.set(ch.key, f); DB.put('favs', f); added++;
-        for (const s of ch.sources) if (!S.byUrl.has(s.url)) S.byUrl.set(s.url, ch);
-      }
-      toast(added ? `Added ${added} favorite${added > 1 ? 's' : ''} (★ Favorites)` : 'You already had all of them');
-      if (S.ui.status === 'fav') { rebuildGroups(); applyFilters(true); } else scheduleRender();
+      if (!confirm(`Add ${chs.length} shared channel${chs.length > 1 ? 's' : ''} to your presets?`)) return;
+      const before = Presets.all().filter(Boolean).length;
+      Presets.fill(chs);
+      const added = Presets.all().filter(Boolean).length - before;
+      const saved = new Set(Presets.all().filter(Boolean).map(p => p.key));
+      const rest = chs.filter(ch => !saved.has(ch.key));
+      toast(added ? `Added ${added} preset${added > 1 ? 's' : ''}` : rest.length ? 'Your presets are full' : 'You already had all of them');
+      if (rest.length) loadWithSpinner({ name: 'Shared channels', text: toM3u(rest) });
     } else if (obj.t === 'list') {
       if (!confirm(`Add the shared playlist “${obj.name || 'Shared playlist'}”?`)) return;
       loadWithSpinner({ name: obj.name || 'Shared playlist', url: obj.url, text: obj.m3u });
     }
   }
-  return { shareFavorites, shareList, receive };
+  return { sharePresets, shareList, receive };
 })();
 
 // Presets: 18 saved channels on the main screen (saved copies, so they work from any playlist).
@@ -1692,18 +1689,6 @@ const Presets = (() => {
   };
 })();
 const favRecord = ch => ({ key: ch.key, name: ch.name, logo: ch.logo, group: ch.group, country: countryOf(ch), sources: ch.sources, addedAt: Date.now() });
-function toggleFav(ch) {
-  if (S.favs.has(ch.key)) {
-    S.favs.delete(ch.key);
-    DB.del('favs', ch.key);
-  } else {
-    const f = favRecord(ch);
-    S.favs.set(ch.key, f);
-    DB.put('favs', f);
-  }
-  if (S.ui.status === 'fav') { rebuildGroups(); applyFilters(true); } else scheduleRender();
-  renderNow();
-}
 
 /* =========================================================================
    Playlists
@@ -1840,7 +1825,7 @@ async function backgroundRefresh(p) {
 }
 async function deletePlaylist() {
   const p = S.playlists.find(x => x.id === S.ui.currentId);
-  if (!p || !confirm(`Remove playlist “${p.name}”? Your favorites and ratings are kept.`)) return;
+  if (!p || !confirm(`Remove playlist “${p.name}”? Your presets and ratings are kept.`)) return;
   await DB.del('kv', 'pl:' + p.id);
   if (isDefaultList(p.url)) { S.ui.removedDefault = true; saveUi(); }
   S.playlists = S.playlists.filter(x => x !== p);
@@ -1854,7 +1839,7 @@ async function deletePlaylist() {
 async function exportData() {
   const data = {
     app: 'm3u-player', version: 2, exportedAt: new Date().toISOString(),
-    settings: S.settings, favs: [...S.favs.values()], presets: Presets.all(), health: [...S.health.values()], recent: S.recent, playlists: [],
+    settings: S.settings, presets: Presets.all(), health: [...S.health.values()], recent: S.recent, playlists: [],
   };
   for (const p of S.playlists) data.playlists.push({ ...p, text: await DB.get('kv', 'pl:' + p.id) });
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
@@ -1869,9 +1854,11 @@ async function importData(file) {
     const data = JSON.parse(await file.text());
     if (data.app !== 'm3u-player') throw new Error('This is not an M3U Player backup.');
     if (data.settings) { S.settings = { ...DEFAULT_SETTINGS, ...data.settings }; await DB.put('kv', S.settings, 'settings'); }
-    for (const old of data.favs || []) { const f = upgradeFav(old); S.favs.set(f.key, f); await DB.put('favs', f); }
+    // Backups from before favorites were removed: their favorites go into empty preset slots.
+    const favPresets = (data.favs || []).map(upgradeFav).filter(f => f.sources);
     for (const h of data.health || []) { S.health.set(h.url, h); await DB.put('health', h); }
     if (Array.isArray(data.presets)) Presets.fill(data.presets.filter(p => p?.key && p.sources)); // into empty slots
+    if (favPresets.length) Presets.fill(favPresets);
     if (data.recent?.length) {
       const seen = new Set(S.recent.map(r => r.key));
       S.recent = [...S.recent, ...data.recent.filter(r => !seen.has(r.key))].slice(0, RECENT_MAX);
@@ -1891,7 +1878,7 @@ async function importData(file) {
   }
 }
 async function clearStats() {
-  if (!confirm('Clear all test results and play history? Your ratings and favorites are kept.')) return;
+  if (!confirm('Clear all test results and play history? Your ratings and presets are kept.')) return;
   await DB.clear('health');
   const keep = [...S.health.values()].filter(h => h.rating);
   S.health.clear();
@@ -1902,7 +1889,7 @@ async function clearStats() {
   toast('Test history cleared');
 }
 async function eraseAll() {
-  if (!confirm('Erase all playlists, presets, favorites, ratings and settings from this browser?')) return;
+  if (!confirm('Erase all playlists, presets, ratings and settings from this browser?')) return;
   await Promise.all(['kv', 'health', 'favs'].map(s => DB.clear(s)));
   location.reload();
 }
@@ -1941,7 +1928,7 @@ function wire() {
     if (e.target.closest('[data-act="add"]')) return openAddDialog();
     if (e.target.closest('[data-act="seed"]')) { S.ui.removedDefault = false; saveUi(); return ensureDefaultPlaylist(true); }
     const star = e.target.closest('[data-star]');
-    if (star) { e.stopPropagation(); return toggleFav(S.filtered[+star.dataset.star]); }
+    if (star) { e.stopPropagation(); return; }
     const row = e.target.closest('.ch');
     if (row) { $('#list').focus({ preventScroll: true }); playChannel(S.filtered[+row.dataset.i]); }
   });
@@ -2033,13 +2020,12 @@ function wire() {
     toast('Settings saved');
   });
   $('#exportBtn').addEventListener('click', exportData);
-  $('#shareFavBtn').addEventListener('click', Share.shareFavorites);
+  $('#sharePresetsBtn').addEventListener('click', Share.sharePresets);
   $('#shareListBtn').addEventListener('click', Share.shareList);
   $('#importFile').addEventListener('change', e => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ''; });
   $('#clearStatsBtn').addEventListener('click', clearStats);
   $('#clearAllBtn').addEventListener('click', eraseAll);
 
-  $('#favBtn').addEventListener('click', () => S.current && toggleFav(S.current));
   $('#prevBtn').addEventListener('click', () => step(-1));
   $('#nextBtn').addEventListener('click', () => step(1));
   $('#dial').addEventListener('click', () => step(1));
@@ -2084,7 +2070,6 @@ function wire() {
     else if (['ArrowRight', 'n', 'ChannelUp', 'MediaTrackNext'].includes(k)) { handled(); step(1); }
     else if (['ArrowLeft', 'p', 'ChannelDown', 'MediaTrackPrevious'].includes(k)) { handled(); step(-1); }
     else if (k === 'Escape') { S.cursor = S.current ? S.filtered.findIndex(c => c.key === S.current.key) : -1; scrollToCurrent(); scheduleRender(); }
-    else if (k === 'f' || k === 'F') { const ch = S.filtered[S.cursor] || S.current; if (ch) toggleFav(ch); }
     else if (k === ' ' && !onButton && session?.started) { handled(); video.paused ? video.play().catch(() => {}) : video.pause(); }
     else if (k === 's' || k === 'S') Sleep.cycle();
   });
@@ -2149,7 +2134,8 @@ async function init() {
   }
   for (const f of favs || []) S.favs.set(f.key, f);
   Presets.load(await DB.get('kv', 'presets'));
-  // First visit with presets: start them off with your favorites (the favorites stay too).
+  // Favorites were replaced by presets: they move once into the empty preset slots. The saved favorites
+  // are left in storage untouched (never shown) rather than deleted.
   if (!S.ui.favsToPresets) {
     S.ui.favsToPresets = true;
     saveUi();
@@ -2166,7 +2152,7 @@ async function init() {
   await selectPlaylist(startId);
 
   // Show (but don't autoplay) the channel you watched last.
-  const last = S.byKey.get(S.ui.lastKey) || S.favs.get(S.ui.lastKey) || (S.ui.lastUrl && S.byUrl.get(S.ui.lastUrl));
+  const last = S.byKey.get(S.ui.lastKey) || Presets.all().find(p => p?.key === S.ui.lastKey) || S.favs.get(S.ui.lastKey) || (S.ui.lastUrl && S.byUrl.get(S.ui.lastUrl));
   if (last?.sources) { S.current = last; scrollToCurrent(); scheduleRender(); }
   renderNow();
 

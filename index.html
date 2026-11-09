@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="modern.css?v=1">
+<link rel="stylesheet" href="modern.css?v=2">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://iptv-org.github.io" crossorigin>
 </head>
@@ -23,7 +23,6 @@
     <aside class="m-nav" id="mNav" aria-label="Menu">
       <div class="m-brand"><img src="favicon.svg" alt="" width="30" height="30"><span>SALA <b>VIDEO</b></span></div>
       <button type="button" class="m-navitem" data-action="home"><span class="m-ico">⌂</span><span>Home</span></button>
-      <button type="button" class="m-navitem" data-action="fav"><span class="m-ico">★</span><span>Favorites</span></button>
       <button type="button" class="m-navitem" data-action="recent"><span class="m-ico">◷</span><span>Recently watched</span></button>
       <button type="button" class="m-navitem" data-action="channels"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5l4 4 4-4"/><rect x="2.5" y="6.5" width="19" height="13" rx="2.5"/><path d="M8 22h8"/></svg><span>Channel browser</span></button>
       <button type="button" class="m-navitem" data-action="add"><span class="m-ico">＋</span><span>Add playlist</span></button>
@@ -60,7 +59,6 @@
           <div class="m-now">
             <div class="m-now-logo" id="mNowLogo">▶</div>
             <div class="m-now-labels"><h1 id="mNowName">Pick a channel</h1><p id="mNowMeta">Tap Channels to find something to watch</p></div>
-            <button type="button" id="mFav" class="m-fav" aria-pressed="false" aria-label="Favorite" title="Favorite (F)">☆</button>
             <button type="button" id="mPlay" class="m-play" aria-label="Play" title="Play / Pause (Space)">▶</button>
           </div>
           <div class="m-connection" id="mConnection" role="status" aria-live="polite">
@@ -129,7 +127,6 @@
   <button id="settingsBtn" tabindex="-1"></button>
   <div id="dial"></div>
   <button id="prevBtn" tabindex="-1"></button><button id="nextBtn" tabindex="-1"></button>
-  <button id="favBtn" tabindex="-1"><b>☆</b></button>
   <button id="sleepBtn" tabindex="-1"><small id="sleepLbl"></small></button>
   <div class="vfd" id="vfd">
     <b id="vfdCh"></b><b id="vfdName"></b><b id="vfdState"></b><b id="vfdSig"></b><b id="vfdPic"></b><b id="vfdBuf"></b><b id="vfdTime"></b><b id="vfdSrc"></b>
@@ -196,9 +193,9 @@
       <button type="button" id="deletePlaylistBtn" class="danger">Remove this playlist</button>
     </div>
     <h3>Your data</h3>
-    <p class="muted small">Playlists, presets, favorites, ratings and test results are saved only in this browser. Use a backup to move them to another browser or device.</p>
+    <p class="muted small">Playlists, presets, ratings and test results are saved only in this browser. Use a backup to move them to another browser or device.</p>
     <div class="btns">
-      <button type="button" id="shareFavBtn" title="A link that carries your favorite channels to another phone or person">Share favorites</button>
+      <button type="button" id="sharePresetsBtn" title="A link that carries your preset channels to another phone or person">Share presets</button>
       <button type="button" id="exportBtn">Export backup</button>
       <label class="filebtn">Import backup<input id="importFile" type="file" accept=".json,application/json" hidden></label>
       <button type="button" id="clearStatsBtn">Clear test history</button>
@@ -212,8 +209,8 @@
 </dialog>
 
 <div id="toast" class="toast hidden"></div>
-<script src="app.js?v=32"></script>
-<script src="modern.js?v=1"></script>
+<script src="app.js?v=33"></script>
+<script src="modern.js?v=2"></script>
 <!-- Offline shell: the app's files are kept in the browser (sw.js), so it opens instantly and without network -->
 <script>
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});

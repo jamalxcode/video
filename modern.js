@@ -8,7 +8,7 @@ window.Modern = (() => {
   const WIDE = '(min-width: 1050px)';
   let browserOpen = matchMedia(WIDE).matches;
   let navOpen = false;
-  // What the picker shows: a playlist ('list'), favorites or recently watched, narrowed by country, genre and search.
+  // What the picker shows: a playlist ('list') or recently watched, narrowed by country, genre and search.
   let view = 'list', country = '', genre = '', query = '';
   let chosenPreset = -1; // the exact slot tapped, even if the same channel is saved twice
   let holdTimer = 0, held = false;
@@ -73,7 +73,6 @@ window.Modern = (() => {
   // Sorted A–Z once per channel set, so filtering keeps that order without re-sorting 12,000 names.
   let sortedFor = null, sorted = [];
   function source() {
-    if (view === 'fav') return [...S.favs.values()].map(channelFor);
     if (view === 'recent') return S.recent.map(channelFor);
     return S.channels;
   }
@@ -132,7 +131,6 @@ window.Modern = (() => {
 
     const lists = '<div class="m-column m-column-source"><h3>Collections</h3>' +
       S.playlists.map(p => pick('list', view === 'list' ? S.ui.currentId : null, p.id, safe(p.name), p.count)).join('') +
-      pick('list', view === 'fav' ? '__fav__' : null, '__fav__', '★ Favorites', S.favs.size) +
       pick('list', view === 'recent' ? '__recent__' : null, '__recent__', '◷ Recently watched', S.recent.length) +
       '<button type="button" data-add-list class="m-add-list">＋ Add playlist</button></div>';
     const ccCol = `<div class="m-column"><h3>Countries <small>${countries.size}</small></h3>` + pick('country', country, '', 'All countries') +
@@ -163,7 +161,6 @@ window.Modern = (() => {
         ? `<p class="m-empty">Couldn’t download the channel list. ${safe(S.loadError)} Retrying automatically…</p><div class="m-empty-acts"><button type="button" data-act="seed">Retry now</button><button type="button" data-add-list>＋ Add your own</button></div>`
         : '<p class="m-empty">No playlist yet.</p><div class="m-empty-acts"><button type="button" data-act="seed">Load all channels</button><button type="button" data-add-list>＋ Add your own</button></div>';
     }
-    if (view === 'fav' && !S.favs.size) return '<p class="m-empty">No favorites yet. Tap ☆ beside the channel that’s on to save it here.</p>';
     if (view === 'recent' && !S.recent.length) return '<p class="m-empty">Nothing watched yet. Channels you play show up here.</p>';
     return '<p class="m-empty">No channels match. Try another collection, country or genre.</p>';
   }
@@ -266,8 +263,7 @@ window.Modern = (() => {
   }
   function paintLive() {
     const ch = S.current, state = liveState();
-    const fav = !!ch && S.favs.has(ch.key);
-    const sig = [ch?.key, ch?.name, state, S.note, fav, status(ch || { sources: [] }).cls, testState(ch || { sources: [] }), S.rev].join('|');
+    const sig = [ch?.key, ch?.name, state, S.note, status(ch || { sources: [] }).cls, testState(ch || { sources: [] }), S.rev].join('|');
     if (sig !== liveSig) {
       liveSig = sig;
       $m('mNowName').innerHTML = ch ? flagHtml(ch) + safe(ch.name) : 'Pick a channel';
@@ -277,10 +273,6 @@ window.Modern = (() => {
         ? [`CH ${chNum(ch)}`, cc ? countryName(cc) : '', groupLabel(ch), langsOf(ch).map(langName).slice(0, 2).join(', ')].filter(Boolean).join(' · ')
         : 'Tap Channels to find something to watch';
       $m('mNowBadge').innerHTML = ch ? marker(ch) : '';
-      $m('mFav').textContent = fav ? '★' : '☆';
-      $m('mFav').classList.toggle('on', fav);
-      $m('mFav').setAttribute('aria-pressed', String(fav));
-      $m('mFav').disabled = !ch;
       $m('mDetails').hidden = !ch;
       for (const b of [$m('mPrev'), $m('mNext')]) b.disabled = !S.filtered.length;
     }
@@ -343,7 +335,7 @@ window.Modern = (() => {
   }
   function refresh() {
     paintLive(); paintPresets(); paintRecent();
-    const sig = [view, country, genre, query, S.ui.currentId, S.channels.length, S.playlists.length, S.favs.size, S.recent.length,
+    const sig = [view, country, genre, query, S.ui.currentId, S.channels.length, S.playlists.length, S.recent.length,
       S.health.size, T.done, T.active, T.queue.length, S.rev, S.current?.key, S.loading, S.loadError].join('|');
     if (sig !== drawnSig) { drawnSig = sig; draw(); }
     const prog = progressText();
@@ -360,7 +352,6 @@ window.Modern = (() => {
   $m('mSettings').addEventListener('click', openSettings);
   $m('mPlay').addEventListener('click', playPause);
   $m('mRetry').addEventListener('click', () => S.current && playChannel(S.current));
-  $m('mFav').addEventListener('click', () => S.current && toggleFav(S.current));
   $m('mPrev').addEventListener('click', () => step(-1));
   $m('mNext').addEventListener('click', () => step(1));
   sleepSel.addEventListener('change', e => Sleep.set(+e.target.value));
@@ -394,7 +385,7 @@ window.Modern = (() => {
     if (d.addList !== undefined) return openAddDialog();
     if (d.act === 'seed') { S.ui.removedDefault = false; saveUi(); return ensureDefaultPlaylist(true); }
     if (d.list !== undefined) {
-      if (d.list === '__fav__' || d.list === '__recent__') { view = d.list === '__fav__' ? 'fav' : 'recent'; country = genre = ''; refresh(); return scrollColumns(3); }
+      if (d.list === '__recent__') { view = 'recent'; country = genre = ''; refresh(); return scrollColumns(3); }
       view = 'list'; country = genre = ''; query = ''; $m('mSearch').value = '';
       Promise.resolve(d.list === S.ui.currentId ? 0 : selectPlaylist(d.list)).then(refresh);
       return scrollColumns(1);
