@@ -8,8 +8,8 @@ window.Modern = (() => {
   const WIDE = '(min-width: 1050px)';
   let browserOpen = matchMedia(WIDE).matches;
   let navOpen = false;
-  // What the picker shows: a playlist ('list') or recently watched, narrowed by country, genre and search.
-  let view = 'list', country = '', genre = '', query = '';
+  // What the picker shows: a playlist ('list') or recently watched, narrowed by language, country, genre and search.
+  let view = 'list', lang = '', country = '', genre = '', query = '';
   let chosenPreset = -1; // the exact slot tapped, even if the same channel is saved twice
   let holdTimer = 0, held = false;
   let items = [];        // the channels the picker lists (all of them, not only the rows drawn)
@@ -63,10 +63,10 @@ window.Modern = (() => {
     if (open) root.querySelector('.m-navitem')?.focus({ preventScroll: true });
   }
   function setView(v) {
-    view = v; country = ''; genre = ''; query = ''; $m('mSearch').value = '';
+    view = v; lang = ''; country = ''; genre = ''; query = ''; $m('mSearch').value = '';
     openNav(false);
     openBrowser(true);
-    scrollColumns(v === 'list' ? 0 : 3);
+    scrollColumns(v === 'list' ? 0 : 4);
   }
 
   /* ---------- the channel list behind the picker ---------- */
@@ -86,6 +86,9 @@ window.Modern = (() => {
     }
     return sorted;
   }
+  // A channel can have several languages; one with none listed goes under "Unknown".
+  const langsFor = ch => { const l = langsOf(ch); return l.length ? l : ['__none__']; };
+  const inLang = ch => !lang || langsFor(ch).some(l => lang.split('|').includes(l));
   const ccOf = ch => countryOf(ch) || '__other__';
   const genresOf = ch => { const g = groupsOf(ch); return g.length ? g : ['Other']; };
   const inCountry = ch => !country || country.split('|').includes(ccOf(ch));
@@ -97,28 +100,32 @@ window.Modern = (() => {
   }
   // Works out what's listed and hands it to the player, so next / previous follow the picker.
   function compute() {
-    items = sortedSource().filter(ch => inCountry(ch) && inGenre(ch) && matches(ch));
+    items = sortedSource().filter(ch => inLang(ch) && inCountry(ch) && inGenre(ch) && matches(ch));
     S.filtered = items;
   }
 
-  /* ---------- the picker: Collections → Countries → Genres → Channels ---------- */
+  /* ---------- the picker: Collections → Languages → Countries → Genres → Channels ---------- */
   let shownListId;
   function draw() {
     // Another playlist opened (added, removed, imported, shared): show its channels, not the old filters.
     if (S.ui.currentId !== shownListId) {
-      if (shownListId !== undefined && view === 'list') { country = ''; genre = ''; query = ''; $m('mSearch').value = ''; }
+      if (shownListId !== undefined && view === 'list') { lang = ''; country = ''; genre = ''; query = ''; $m('mSearch').value = ''; }
       shownListId = S.ui.currentId;
     }
     compute();
     if (!browserOpen) return;
     const all = sortedSource();
-    const countries = new Map(), genres = new Map();
+    const langs = new Map(), countries = new Map(), genres = new Map();
     for (const ch of all) {
+      for (const l of langsFor(ch)) langs.set(l, (langs.get(l) || 0) + 1);
+      if (!inLang(ch)) continue;
       const cc = ccOf(ch);
       countries.set(cc, (countries.get(cc) || 0) + 1);
       if (!inCountry(ch)) continue;
       for (const g of genresOf(ch)) genres.set(g, (genres.get(g) || 0) + 1);
     }
+    const lLabel = l => (l === '__none__' ? 'Unknown' : langName(l));
+    const lSorted = [...langs].sort((a, b) => (a[0] === '__none__') - (b[0] === '__none__') || alpha.compare(lLabel(a[0]), lLabel(b[0])));
     const ccLabel = cc => (cc === '__other__' ? 'Other' : countryName(cc));
     const ccSorted = [...countries].sort((a, b) => alpha.compare(ccLabel(a[0]), ccLabel(b[0])));
     const gSorted = [...genres].sort((a, b) => alpha.compare(a[0], b[0]));
@@ -132,22 +139,29 @@ window.Modern = (() => {
       S.playlists.map(p => pick('list', view === 'list' ? S.ui.currentId : null, p.id, safe(p.name), p.count)).join('') +
       pick('list', view === 'recent' ? '__recent__' : null, '__recent__', '◷ Recently watched', S.recent.length) +
       '<button type="button" data-add-list class="m-add-list">＋ Add playlist</button></div>';
+    // A merged row counts each channel once, even one that's in several of its languages or genres.
+    const recount = (entries, pool, keysOf) => entries.map(e => (e.keys.length < 2 ? e
+      : { ...e, n: pool.filter(ch => keysOf(ch).some(k => e.keys.includes(k))).length }));
+    const inL = all.filter(inLang), inLC = inL.filter(inCountry);
+    const lCol = `<div class="m-column"><h3>Languages <small>${langs.size}</small></h3>` + pick('lang', lang, '', 'All languages') +
+      recount(mergeSmall(lSorted.map(([l, n]) => ({ key: l, n, label: lLabel(l) }))), all, langsFor).map(e => merged('lang', lang, e,
+        (l, n) => pick('lang', lang, l, safe(lLabel(l)), n))).join('') + '</div>';
     const ccCol = `<div class="m-column"><h3>Countries <small>${countries.size}</small></h3>` + pick('country', country, '', 'All countries') +
-      mergeSmall(ccSorted.map(([cc, n]) => ({ key: cc, n, label: ccLabel(cc) }))).map(e => merged('country', country, e,
+      recount(mergeSmall(ccSorted.map(([cc, n]) => ({ key: cc, n, label: ccLabel(cc) }))), inL, ch => [ccOf(ch)]).map(e => merged('country', country, e,
         (cc, n) => pick('country', country, cc, (cc === '__other__' ? '' : countryFlag(cc) + ' ') + safe(ccLabel(cc)), n))).join('') + '</div>';
     const gCol = `<div class="m-column"><h3>Genres <small>${genres.size}</small></h3>` + pick('genre', genre, '', 'All genres') +
-      mergeSmall(gSorted.map(([g, n]) => ({ key: g, n, label: g }))).map(e => merged('genre', genre, e,
+      recount(mergeSmall(gSorted.map(([g, n]) => ({ key: g, n, label: g }))), inLC, genresOf).map(e => merged('genre', genre, e,
         (g, n) => pick('genre', genre, g, safe(g), n))).join('') + '</div>';
     const rows = items.slice(0, 350).map((ch, i) => {
       const on = S.current?.key === ch.key;
       return `<div class="m-st-row${verified(ch) ? ' m-verified' : ''}${on ? ' m-on' : ''}"><button type="button" data-ch="${i}" class="m-st-select" title="${safe(ch.name)}"${on ? ' aria-current="true"' : ''}>${logo(ch)}<span class="m-st-text"><strong>${flagHtml(ch)}${safe(ch.name)}</strong>${langTag(ch) ? `<small class="m-lang" title="${safe(langsOf(ch).map(langName).join(', '))}">${safe(langTag(ch))}</small>` : ''}${marker(ch)}</span></button></div>`;
     }).join('');
     const chCol = `<div class="m-column m-column-stations"><h3>Channels <small>${items.length}</small></h3>` + (rows || emptyText()) +
-      (items.length > 350 ? '<p class="m-more">Showing the first 350. Pick a country or genre, or search, to narrow it down.</p>' : '') + '</div>';
+      (items.length > 350 ? '<p class="m-more">Showing the first 350. Pick a language, country or genre, or search, to narrow it down.</p>' : '') + '</div>';
 
     const holder = $m('mColumns');
     const x = holder.scrollLeft, ys = [...holder.children].map(c => c.scrollTop);
-    holder.innerHTML = lists + ccCol + gCol + chCol;
+    holder.innerHTML = lists + lCol + ccCol + gCol + chCol;
     holder.scrollLeft = x;
     [...holder.children].forEach((c, i) => { c.scrollTop = ys[i] || 0; });
     fitMergedNames();
@@ -161,7 +175,7 @@ window.Modern = (() => {
         : '<p class="m-empty">No playlist yet.</p><div class="m-empty-acts"><button type="button" data-act="seed">Load all channels</button><button type="button" data-add-list>＋ Add your own</button></div>';
     }
     if (view === 'recent' && !S.recent.length) return '<p class="m-empty">Nothing watched yet. Channels you play show up here.</p>';
-    return '<p class="m-empty">No channels match. Try another collection, country or genre.</p>';
+    return '<p class="m-empty">No channels match. Try another collection, language, country or genre.</p>';
   }
   // Countries / genres with only 1–2 channels are merged, A–Z, with the next small ones until the group
   // holds at least 6, so these columns scroll less. Bigger entries stay as they are.
@@ -353,7 +367,7 @@ window.Modern = (() => {
   }
   function refresh() {
     paintLive(); paintPresets(); paintRecent();
-    const sig = [view, country, genre, query, S.ui.currentId, S.channels.length, S.playlists.length, S.recent.length, S.recent[0]?.key,
+    const sig = [view, lang, country, genre, query, S.ui.currentId, S.channels.length, S.playlists.length, S.recent.length, S.recent[0]?.key,
       S.health.size, T.done, T.active, T.queue.length, S.rev, S.current?.key, S.loading, S.loadError].join('|');
     if (sig !== drawnSig) { drawnSig = sig; draw(); }
     const prog = progressText();
@@ -384,7 +398,7 @@ window.Modern = (() => {
     if (T.manual && (T.active || T.queue.length)) return stopTests();
     const urls = testUrlsFor(items);
     if (!urls.length) return toast(items.length ? 'Everything listed was checked in the last 6 hours' : 'Nothing to test');
-    if (urls.length > 1500 && !confirm(`Test ${urls.length} channels? This can take a while. Tip: pick a country or genre first.`)) return;
+    if (urls.length > 1500 && !confirm(`Test ${urls.length} channels? This can take a while. Tip: pick a language, country or genre first.`)) return;
     queueTests(urls, { manual: true });
   });
   root.addEventListener('click', e => {
@@ -403,13 +417,14 @@ window.Modern = (() => {
     if (d.addList !== undefined) return openAddDialog();
     if (d.act === 'seed') { S.ui.removedDefault = false; saveUi(); return ensureDefaultPlaylist(true); }
     if (d.list !== undefined) {
-      if (d.list === '__recent__') { view = 'recent'; country = genre = ''; refresh(); return scrollColumns(3); }
-      view = 'list'; country = genre = ''; query = ''; $m('mSearch').value = '';
+      if (d.list === '__recent__') { view = 'recent'; lang = country = genre = ''; refresh(); return scrollColumns(1); }
+      view = 'list'; lang = country = genre = ''; query = ''; $m('mSearch').value = '';
       Promise.resolve(d.list === S.ui.currentId ? 0 : selectPlaylist(d.list)).then(refresh);
       return scrollColumns(1);
     }
-    if (d.country !== undefined) { country = d.country; genre = ''; refresh(); return scrollColumns(2); }
-    if (d.genre !== undefined) { genre = d.genre; refresh(); return scrollColumns(3); }
+    if (d.lang !== undefined) { lang = d.lang; country = genre = ''; refresh(); return scrollColumns(2); }
+    if (d.country !== undefined) { country = d.country; genre = ''; refresh(); return scrollColumns(3); }
+    if (d.genre !== undefined) { genre = d.genre; refresh(); return scrollColumns(4); }
     if (d.ch !== undefined) {
       const ch = items[+d.ch];
       if (ch) { chosenPreset = -1; playChannel(ch); openBrowser(false); }

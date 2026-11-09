@@ -112,8 +112,8 @@
         <div><h2>Channel picker</h2><p>Every channel in your playlists</p></div>
         <button type="button" id="mBrowserClose" class="m-back-radio" aria-label="Back to the TV screen" title="Back to TV">← <span>Back to TV</span></button>
       </header>
-      <div class="m-browser-search"><input type="search" id="mSearch" placeholder="Search channels, countries, genres…" aria-label="Search channels" autocomplete="off"></div>
-      <div class="m-columns" id="mColumns" aria-label="Channel browser: collections, countries, genres, channels"></div>
+      <div class="m-browser-search"><input type="search" id="mSearch" placeholder="Search channels, languages, countries…" aria-label="Search channels" autocomplete="off"></div>
+      <div class="m-columns" id="mColumns" aria-label="Channel browser: collections, languages, countries, genres, channels"></div>
       <footer class="m-browser-footer"><span class="m-silver-key">✓ Verified working</span><span class="m-failed-key">× Unavailable</span><span id="mTestProgress" class="m-progress"></span><button type="button" id="mTest">Test channels</button></footer>
     </aside>
   </div>
@@ -186,7 +186,7 @@
 
 <div id="toast" class="toast hidden"></div>
 <script src="app.js?v=35"></script>
-<script src="modern.js?v=5"></script>
+<script src="modern.js?v=6"></script>
 <!-- Offline shell: the app's files are kept in the browser (sw.js), so it opens instantly and without network -->
 <script>
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
