@@ -89,6 +89,10 @@ window.Modern = (() => {
   // A channel can have several languages; one with none listed goes under "Unknown".
   const langsFor = ch => { const l = langsOf(ch); return l.length ? l : ['__none__']; };
   const inLang = ch => !lang || langsFor(ch).some(l => lang.split('|').includes(l));
+  // Each language's flag: the country it started in (English → UK, Arabic → Saudi Arabia). Languages
+  // with no country of their own (Kurdish, Romani, Tibetan, Uyghur, Serbo-Croatian) have none.
+  const LANG_HOME = Object.fromEntries('abk:ge acf:lc ach:ug acm:iq adh:ug afr:za aho:in aii:iq alz:ug amh:et ara:sa arm:am arz:eg asm:in asp:dz ayb:bj aym:bo aze:az bak:ru bam:ml bbo:bf bel:by ben:bd bho:in bib:bf bos:ba box:bf bul:bg cat:es ceb:ph ces:cz cgg:ug cmn:cn cnr:me cnu:dz cym:uk cze:cz czh:cn dan:dk deu:de ger:de dgi:bf div:mv dje:ne dut:nl dyu:bf ell:gr gre:gr eng:uk est:ee eus:es baq:es ewe:gh fas:ir per:ir fil:ph fin:fi fon:bj fra:fr fre:fr fry:nl fuc:sn ful:sn gcf:gp gla:uk gle:ie glg:es gom:in grn:py gug:py guj:in gux:bf hat:ht hau:ng heb:il her:na hin:in hmn:cn hmo:pg hne:in hrv:hr hun:hu hye:am icr:co iku:ca ind:id isl:is ice:is ita:it its:ng jap:jp jav:id jpn:jp kab:dz kan:in kat:ge geo:ge kaz:kz kbp:tg kdi:ug khm:kh kik:ke kin:rw kir:kg kmz:ir kok:in kon:cd koo:ug kor:kr lah:pk laj:ug lao:la lat:it lav:lv lee:bf lin:cd lit:lt lob:bf ltz:lu lua:cd lug:ug luo:ke lus:in mai:in mak:id mal:in mar:in mkd:mk mac:mk mkw:cg mlt:mt mnk:ml mon:mn mos:bf mri:nz mao:nz msa:my may:my mya:mm bur:mm mzb:dz nan:cn nbl:za nep:np nld:nl nor:no nob:no nno:no nyn:ug nyo:ug ori:in ory:in pam:ph pan:in pap:cw pol:pl por:pt prd:af prs:af pus:af que:pe rif:ma rkm:bf ron:ro rum:ro run:bi rus:ru sah:ru sat:in sbd:bf sfs:za shi:ma shy:dz sin:lk slk:sk slo:sk slv:si smo:ws snd:pk som:so spa:es sqi:al alb:al srp:rs ssw:sz stj:bf sun:id svc:vc swa:tz swe:se sym:bf syr:sy tah:pf tam:in taq:ml tat:ru tel:in tgk:tj tgl:ph tha:th tig:er tir:er tmh:ml tpi:pg tso:za ttj:ug tuk:tm tur:tr tzm:ma ukr:ua urd:pk uzb:uz ven:za vie:vn wol:sn xho:za xms:ma yor:ng yua:mx yue:cn zho:cn chi:cn zul:za zza:tr bre:fr oci:fr cos:fr sco:uk kal:gl fao:fo sme:no ast:es tsn:bw sot:ls nya:mw sna:zw orm:et mlg:mg kas:in ibo:ng aka:gh'.split(' ').map(x => x.split(':')));
+  const langFlag = l => (LANG_HOME[l] ? countryFlag(LANG_HOME[l]) + ' ' : '');
   const ccOf = ch => countryOf(ch) || '__other__';
   const genresOf = ch => { const g = groupsOf(ch); return g.length ? g : ['Other']; };
   const inCountry = ch => !country || country.split('|').includes(ccOf(ch));
@@ -144,7 +148,7 @@ window.Modern = (() => {
       : { ...e, n: pool.filter(ch => keysOf(ch).some(k => e.keys.includes(k))).length }));
     const inL = all.filter(inLang), inLC = inL.filter(inCountry);
     const lCol = `<div class="m-column"><h3>Languages <small>${langs.size}</small></h3>` + pick('lang', lang, '', 'All languages') +
-      lSorted.map(([l, n]) => pick('lang', lang, l, safe(lLabel(l)), n)).join('') + '</div>'; // every language on its own row
+      lSorted.map(([l, n]) => pick('lang', lang, l, langFlag(l) + safe(lLabel(l)), n)).join('') + '</div>'; // every language on its own row
     const ccCol = `<div class="m-column"><h3>Countries <small>${countries.size}</small></h3>` + pick('country', country, '', 'All countries') +
       recount(mergeSmall(ccSorted.map(([cc, n]) => ({ key: cc, n, label: ccLabel(cc) }))), inL, ch => [ccOf(ch)]).map(e => merged('country', country, e,
         (cc, n) => pick('country', country, cc, (cc === '__other__' ? '' : countryFlag(cc) + ' ') + safe(ccLabel(cc)), n))).join('') + '</div>';

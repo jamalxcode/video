@@ -366,13 +366,18 @@ function langName(code) {
   return code.replace(/^./, c => c.toUpperCase());
 }
 const langMemo = new WeakMap();
+// The same language under two codes (older bibliographic ones, and two slips in iptv-org's data:
+// "jap" on anime channels, "far" on an Iranian one) is one language.
+const LANG_SAME = { dut: 'nld', fre: 'fra', cze: 'ces', arm: 'hye', ger: 'deu', gre: 'ell', per: 'fas', chi: 'zho', geo: 'kat',
+  ice: 'isl', mac: 'mkd', mao: 'mri', may: 'msa', bur: 'mya', rum: 'ron', slo: 'slk', alb: 'sqi', baq: 'eus', wel: 'cym', tib: 'bod',
+  jap: 'jpn', far: 'fas' };
 function langsOf(ch) {
   const m = langMemo.get(ch);
   if (m && m.v === L.version) return m.l;
   let l = [];
   for (const s of ch.sources || []) for (const x of s.langs || []) l.push(normLang(x));
   if (!l.length && ch.key?.startsWith('id:')) l = L.map.get(ch.key.slice(3)) || [];
-  l = [...new Set(l)];
+  l = [...new Set(l.map(x => LANG_SAME[x] || x))];
   langMemo.set(ch, { v: L.version, l });
   return l;
 }
