@@ -99,7 +99,6 @@ window.Modern = (() => {
   function compute() {
     items = sortedSource().filter(ch => inCountry(ch) && inGenre(ch) && matches(ch));
     S.filtered = items;
-    S.cursor = S.current ? items.findIndex(c => c.key === S.current.key) : -1;
   }
 
   /* ---------- the picker: Collections → Countries → Genres → Channels ---------- */

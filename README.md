@@ -11,7 +11,7 @@ The layout and channel picker follow [radio.sala.company](https://radio.sala.com
 - **Now playing:** the TV picture, then the channel with its flag, number, country, genre and language, and a large Play/Pause button. Below it the real connection status ("Connecting…", "Connected · On air · Source 1 of 2 · HLS · 720p", "No signal" with the reason and a Retry button).
 - **Sleep, channel up/down and volume:** one sleep selector (15 minutes to 3 hours, with a live countdown and **Sleep Off**; at zero the sound fades out), ◀ CH / CH ▶ buttons, and a volume slider (not on phones, where the phone's own buttons work).
 - **Channel details, sources and rating:** pick a channel's source by hand, rate it (Smooth / Buffers / Broken), test it, copy its link for VLC, and see its play and test history.
-- **Presets:** 18 slots with channel logos. Tap to play; long-press (or Shift+Enter) saves the channel that's on. Only the slot you picked is highlighted, even if a channel is saved twice. Presets replace favorites: saved favorites moved once into the empty slots, and favorites in old backups and old share links do the same (any that don't fit are added as a playlist).
+- **Presets:** 18 slots with channel logos. Tap to play; long-press (or Shift+Enter) saves the channel that's on. Only the slot you picked is highlighted, even if a channel is saved twice. Presets are saved copies; when a playlist loads they pick up their channel's latest stream links. Presets replace favorites: saved favorites moved once into the empty slots, and favorites in old backups and old share links do the same (any that don't fit are added as a playlist).
 - **Recently watched:** the last channels you actually watched.
 - **Channels** (the TV button, with a sweeping red scanner light): a Finder-style picker with Collections → Countries → Genres → Channels, all A–Z. Collections holds your playlists, ◷ Recently watched and ＋ Add playlist. Countries and genres with only 1–2 channels are merged into groups of six or more. Search matches channel names, countries, genres and languages. Channels on screen are checked quietly; a silver ✓ marks channels a real test or play showed working. Picking a channel plays it and returns to the TV; on phones the picker slides over the screen. *Test channels* checks everything listed. Next / previous channel follow what the picker lists.
 - **Menu (☰ on phones, a sidebar on wider screens):** Home, Recently watched, Channel browser, Add playlist, Settings.
@@ -68,7 +68,6 @@ Plain HTML, CSS and JS, with no build step.
 | `modern.css` | The screen and its dialogs, and the TV picture's retro styles |
 | `sw.js` | Offline shell |
 
-`index.html` still holds a few hidden older controls (`#legacy`: the old guide, filters and VCR display) because parts of `app.js` write to them; they're never shown.
 
 ## Put it on GitHub Pages
 

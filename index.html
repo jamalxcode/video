@@ -120,30 +120,6 @@
   <div id="mBackdrop" class="m-backdrop"></div>
 </div>
 
-<!-- Older controls, not shown: app.js still writes to some of them (VCR display, guide, playlist menu). -->
-<div id="legacy" hidden>
-  <select id="playlistSelect" aria-hidden="true"></select>
-  <button id="addPlaylistBtn" tabindex="-1"></button>
-  <button id="settingsBtn" tabindex="-1"></button>
-  <div id="dial"></div>
-  <button id="prevBtn" tabindex="-1"></button><button id="nextBtn" tabindex="-1"></button>
-  <button id="sleepBtn" tabindex="-1"><small id="sleepLbl"></small></button>
-  <div class="vfd" id="vfd">
-    <b id="vfdCh"></b><b id="vfdName"></b><b id="vfdState"></b><b id="vfdSig"></b><b id="vfdPic"></b><b id="vfdBuf"></b><b id="vfdTime"></b><b id="vfdSrc"></b>
-    <button id="vfdNextBtn" tabindex="-1"></button><b id="vfdNext"></b><b id="vfdClock"></b>
-  </div>
-  <div id="nowName"></div><div id="nowMeta"></div><img id="nowLogo" alt="">
-  <span id="count"></span>
-  <input id="search" type="search" tabindex="-1">
-  <select id="sortSel"><option value=""></option><option value="best"></option><option value="name"></option></select>
-  <button id="testBtn" tabindex="-1"></button>
-  <select id="countryFilter"></select><select id="langFilter"></select><select id="groupFilter"></select>
-  <select id="statusFilter"><option value="all"></option><option value="fav"></option><option value="recent"></option><option value="good"></option><option value="hideBad"></option><option value="noGeo"></option><option value="untested"></option></select>
-  <div id="scanBar"></div>
-  <div id="list"><div id="listInner"></div></div>
-  <span id="testProgress"></span>
-</div>
-
 <dialog id="addDlg">
   <form method="dialog" id="addForm">
     <h3>Add playlist</h3>
@@ -209,8 +185,8 @@
 </dialog>
 
 <div id="toast" class="toast hidden"></div>
-<script src="app.js?v=34"></script>
-<script src="modern.js?v=4"></script>
+<script src="app.js?v=35"></script>
+<script src="modern.js?v=5"></script>
 <!-- Offline shell: the app's files are kept in the browser (sw.js), so it opens instantly and without network -->
 <script>
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});

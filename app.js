@@ -221,23 +221,19 @@ const S = {
   byKey: new Map(),     // channel key -> channel
   byUrl: new Map(),     // stream URL -> channel
   numByKey: new Map(),  // channel key -> channel number (position in the playlist, from 1)
-  filtered: [],         // what the list currently shows
+  filtered: [],         // what the channel picker lists (next / previous step through it)
   health: new Map(),    // stream URL -> health record
   hosts: new Map(),     // server host -> { ok, blocked, dead } from recent tests
   favs: new Map(),      // channel key -> saved channel
   settings: { ...DEFAULT_SETTINGS },
-  ui: { currentId: null, search: '', group: '', country: '', lang: '', status: 'all', sort: '', lastKey: '', volume: 1, muted: false },
+  ui: { currentId: null, lastKey: '', volume: 1, muted: false },
   recent: [],           // recently watched channels, newest first (saved copies, so they work across playlists)
-  cursor: -1,           // highlighted guide row for arrow-key / remote navigation
-  lit: new Map(),       // channel key -> when it was just confirmed good (for the light-up effect)
   current: null,
   loading: '',          // message shown in the list while a playlist downloads
   loadError: '',        // why the automatic channel-list download failed (shown while retrying)
   note: '',             // why the channel on now couldn't play (shown on the connection panel)
   rev: 0,               // counts every change the screen should redraw for (modern.js watches it)
 };
-// The screen is modern.js; the older guide, filters and VCR display (still in the page, hidden) stay idle.
-const MODERN = document.body.classList.contains('modern-ui');
 const saveUi = () => DB.put('kv', { ...S.ui }, 'ui');
 
 /* =========================================================================
@@ -348,15 +344,6 @@ function countryFromName(name) {
   return '';
 }
 const countryFlag = cc => (cc ? [...(cc === 'uk' ? 'gb' : cc).toUpperCase()].map(c => String.fromCodePoint(0x1f1a5 + c.charCodeAt(0))).join('') : '');
-// Warnings from the playlist: all sources geo-blocked / all sources part-time.
-const isGeo = ch => ch.sources.length > 0 && ch.sources.every(s => s.geo);
-const isPartTime = ch => ch.sources.length > 0 && ch.sources.every(s => s.part);
-function tagsHtml(ch) {
-  let t = '';
-  if (isGeo(ch)) t += '<span class="tag" title="Geo-blocked: may only work in its home country">GEO</span>';
-  if (isPartTime(ch)) t += '<span class="tag" title="Not on air 24/7: may be off at times">PART-TIME</span>';
-  return t;
-}
 
 /* Languages: from the playlist's own tvg-language, else iptv-org's feed data matched by channel id. */
 const LANG_API = IPTV_ORG.replace('/iptv/', '/api/');
@@ -398,8 +385,7 @@ function applyLangData(d) {
   L.names = new Map(d.names);
   L.byName = new Map(d.names.map(([c, n]) => [n.toLowerCase(), c]));
   L.version++;
-  rebuildGroups();
-  applyFilters(true);
+  channelsChanged();
   renderNow();
 }
 // Loads iptv-org's languages for every channel feed, keeps a compact copy in this browser.
@@ -740,7 +726,6 @@ function recordProbe(url, p) {
   const h = H(url);
   if (p.kind) h.kind = p.kind;
   h.probe = p;
-  if (p.status === 'ok') lightUp(S.byUrl.get(url));
   saveH(h);
   if (!p.inferred) noteHost(url, p);
   // This source is bad: test the channel's next backup source right away.
@@ -773,18 +758,8 @@ function pump() {
       });
   }
 }
-// Only a test you asked for (Test channels, or Test on a channel) shows its progress; automatic tests work quietly and just update the badges.
-function updateTestUi() {
-  const busy = T.active > 0 || T.queue.length > 0;
-  $('#testBtn').textContent = T.manual && busy ? 'Stop testing' : 'Test channels';
-  $('#testProgress').textContent = T.manual && busy ? `Checking ${T.done}/${T.total}…` : '';
-  $('#scanBar').classList.toggle('on', T.manual && busy);
-  scheduleRender();
-}
-// Rows are grey until a channel proves it streams well; then it lights up blue (briefly animated).
-function lightUp(ch) {
-  if (ch?.key) S.lit.set(ch.key, Date.now());
-}
+// The picker shows test progress (modern.js); this just tells it something changed.
+const updateTestUi = () => scheduleRender();
 // What a row should say while the tester is busy with it.
 function testState(ch) {
   const vis = s => T.manual || T.shown.has(s.url);
@@ -801,195 +776,17 @@ function testUrlsFor(channels) {
   }
   return urls;
 }
-function autoTestVisible() {
-  if (MODERN || !S.settings.autoTest) return; // modern.js checks the picker rows on screen instead
-  const list = $('#list');
-  const start = Math.floor(list.scrollTop / ROW);
-  const end = Math.min(S.filtered.length, Math.ceil((list.scrollTop + listHeight()) / ROW));
-  const urls = testUrlsFor(S.filtered.slice(start, end));
-  if (urls.length) queueTests(urls);
-}
 
 /* =========================================================================
-   Channel list (virtualized — handles playlists with tens of thousands of entries)
+   Redraws: the screen (modern.js) redraws what changed whenever S.rev moves.
    ========================================================================= */
-const ROW = 58; // room for a two-line channel name plus the status line
-// Fallback for when the list has no layout yet (hidden tab, first paint).
-const listHeight = () => $('#list').clientHeight || window.innerHeight || 800;
-let renderPending = false;
-function scheduleRender() {
-  S.rev++;
-  if (renderPending) return;
-  renderPending = true;
-  const go = () => { if (renderPending) { renderPending = false; renderList(); } };
-  requestAnimationFrame(go);
-  setTimeout(go, 100); // rAF doesn't fire in background tabs
-}
-function renderList() {
-  if (MODERN) return;
-  const list = $('#list');
-  const inner = $('#listInner');
-  const n = S.filtered.length;
-  list.setAttribute('aria-activedescendant', S.cursor >= 0 && S.cursor < n ? 'ch-' + S.cursor : '');
-  if (!n) {
-    inner.style.height = 'auto';
-    inner.innerHTML = S.loading
-      ? `<div class="empty"><div class="spinner"></div>${esc(S.loading)}</div>`
-      : !S.playlists.length
-      ? S.loadError
-        ? `<div class="empty">Couldn’t download the channel list.<br><small>${esc(S.loadError)}</small><br>Retrying automatically… <button class="primary" data-act="seed">Retry now</button> <button data-act="add">+ Add your own</button></div>`
-        : '<div class="empty">No playlist yet.<br><button class="primary" data-act="seed">Load all channels</button> <button data-act="add">+ Add your own</button></div>'
-      : S.ui.status === 'fav' && !S.favs.size
-        ? '<div class="empty">No favorites yet.<br>Tap ☆ next to a channel to save it here.</div>'
-        : S.ui.status === 'recent' && !S.recent.length
-          ? '<div class="empty">Nothing watched yet.<br>Channels you play show up here.</div>'
-          : '<div class="empty">No channels match.</div>';
-    return;
-  }
-  inner.style.height = n * ROW + 'px';
-  const start = Math.max(0, Math.floor(list.scrollTop / ROW) - 6);
-  const end = Math.min(n, Math.ceil((list.scrollTop + listHeight()) / ROW) + 6);
-  let html = '';
-  for (let i = start; i < end; i++) {
-    const ch = S.filtered[i];
-    const st = channelStatus(ch);
-    const fav = S.favs.has(ch.key);
-    const active = S.current && S.current.key === ch.key;
-    const lt = langTag(ch);
-    const more = (lt ? ` · ${lt}` : '') + (ch.sources.length > 1 ? ` · ${ch.sources.length} sources` : '');
-    // Grey until proven good; blue once a test or a real play shows it streams well.
-    const good = st.cls === 'good';
-    const litAgo = good ? Date.now() - (S.lit.get(ch.key) || 0) : Infinity;
-    const lit = litAgo < 1200 ? ' lit' : '';
-    const ts = testState(ch);
-    const badge = ts === 'checking'
-      ? '<span class="badge checking"><i class="mini-spin" aria-hidden="true"></i>Checking…</span>'
-      : ts === 'queued' && st.cls === 'untested'
-        ? '<span class="badge queued"><i aria-hidden="true">···</i>Queued</span>'
-        : badgeHtml(st);
-    html += `<div class="ch${active ? ' active' : ''}${i === S.cursor ? ' cursor' : ''}${good ? '' : ' dead'}${ts ? ' ' + ts : ''}${lit}" id="ch-${i}" role="option" aria-selected="${i === S.cursor}" data-i="${i}" style="top:${i * ROW}px${lit ? `;--lit-delay:-${litAgo}ms` : ''}" title="${esc(ch.name + ' — ' + st.tip)}">
-      <span class="ch-num">${chNum(ch)}</span>
-      <div class="ch-body">
-        <div class="logo">${ch.logo ? `<img src="${esc(ch.logo)}" loading="lazy" referrerpolicy="no-referrer" alt="" onerror="this.remove()">` : '▶'}</div>
-        <div class="info">
-          <div class="name">${flagHtml(ch)}${esc(ch.name)}</div>
-          <div class="meta">${badge}${tagsHtml(ch)}<span class="grp">${esc(groupLabel(ch) + more)}</span></div>
-        </div>
-        <button class="star${fav ? ' on' : ''}" data-star="${i}" tabindex="-1" title="${fav ? 'Remove from' : 'Add to'} favorites" aria-label="${fav ? 'Remove from' : 'Add to'} favorites">${fav ? '★' : '☆'}</button>
-      </div>
-    </div>`;
-  }
-  inner.innerHTML = html;
-}
-// Signal-strength bars stand in for the status dot (cable-guide look).
-const BARS = { good: '▮▮▮▮', warn: '▮▮▯▯', bad: '▯▯▯▯', blocked: '✕', untested: '····' };
-// A small drawn signal meter (4 stair-step bars): same size on every device, unlike ▮ characters.
-const SIG_LEVEL = { good: 4, warn: 2, bad: 0, untested: 0 };
-function sigHtml(cls) {
-  if (cls === 'blocked') return '<i class="sig sig-x" aria-hidden="true">✕</i>';
-  const n = SIG_LEVEL[cls] ?? 0;
-  return `<i class="sig" aria-hidden="true">${[1, 2, 3, 4].map(i => `<b${i > n ? ' class="off"' : ''}></b>`).join('')}</i>`;
-}
-const badgeHtml = (st, fallback = '') =>
-  `<span class="badge ${st.cls}" aria-label="${esc(st.label || fallback || 'Untested')}">${sigHtml(st.cls)}${esc(st.label || fallback)}</span>`;
+function scheduleRender() { S.rev++; }
+// The channels or their order changed (a playlist loaded or refreshed, history cleared).
+function channelsChanged() { S.rev++; window.Modern?.sync(); }
 const chNum = ch => S.numByKey.get(ch.key) ?? '★';
 // A channel can sit in several groups, written "News;Sports" (iptv-org does this).
 const groupsOf = ch => ch.group.split(';').map(g => g.trim()).filter(Boolean);
 const groupLabel = ch => groupsOf(ch).join(', ');
-function passFilter(ch, cls, f) {
-  if (f === 'good') return cls === 'good';
-  if (f === 'hideBad') return !isBadCls(cls);
-  if (f === 'untested') return cls === 'untested';
-  if (f === 'noGeo') return !isGeo(ch);
-  return true;
-}
-function sourceChannels() {
-  if (S.ui.status === 'fav') return [...S.favs.values()].map(f => S.byKey.get(f.key) || f).sort((a, b) => a.name.localeCompare(b.name));
-  if (S.ui.status === 'recent') return S.recent.map(r => S.byKey.get(r.key) || r); // newest first
-  return S.channels;
-}
-// Group and country menus, with counts for what the current list holds.
-function rebuildGroups() {
-  if (MODERN) return;
-  const src = sourceChannels();
-  const counts = new Map();
-  const countries = new Map();
-  const langs = new Map();
-  for (const c of src) {
-    for (const g of groupsOf(c)) counts.set(g, (counts.get(g) || 0) + 1);
-    const cc = countryOf(c);
-    if (cc) countries.set(cc, (countries.get(cc) || 0) + 1);
-    for (const l of langsOf(c)) langs.set(l, (langs.get(l) || 0) + 1);
-  }
-  const lcs = [...langs.keys()].map(l => [l, langName(l)]).sort((a, b) => a[1].localeCompare(b[1]));
-  if (!langs.has(S.ui.lang)) S.ui.lang = '';
-  const lsel = $('#langFilter');
-  lsel.classList.toggle('hidden', lcs.length < 2);
-  lsel.innerHTML = `<option value="">Language: all</option>` +
-    lcs.map(([l, name]) => `<option value="${esc(l)}"${l === S.ui.lang ? ' selected' : ''}>${esc(name)} (${langs.get(l)})</option>`).join('');
-  const groups = [...counts.keys()].sort((a, b) => a.localeCompare(b));
-  if (!counts.has(S.ui.group)) S.ui.group = '';
-  $('#groupFilter').innerHTML = `<option value="">Group: all</option>` +
-    groups.map(g => `<option value="${esc(g)}"${g === S.ui.group ? ' selected' : ''}>${esc(g)} (${counts.get(g)})</option>`).join('');
-  const ccs = [...countries.keys()].map(cc => [cc, countryName(cc)]).sort((a, b) => a[1].localeCompare(b[1]));
-  if (!countries.has(S.ui.country)) S.ui.country = '';
-  const sel = $('#countryFilter');
-  sel.classList.toggle('hidden', ccs.length < 2);
-  sel.innerHTML = `<option value="">Country: all</option>` +
-    ccs.map(([cc, name]) => `<option value="${cc}"${cc === S.ui.country ? ' selected' : ''}>${countryFlag(cc)} ${esc(name)} (${countries.get(cc)})</option>`).join('');
-}
-function applyFilters(keepScroll = false) {
-  // The channel picker decides what's listed (and so what next / previous step through).
-  if (MODERN) { S.rev++; window.Modern?.sync(); return; }
-  const q = S.ui.search.toLowerCase().trim();
-  const g = S.ui.group;
-  const cc = S.ui.country;
-  const f = S.ui.status;
-  const needStatus = ['good', 'hideBad', 'untested'].includes(f) || S.ui.sort === 'best';
-  const rows = [];
-  for (const ch of sourceChannels()) {
-    if (q && !ch.name.toLowerCase().includes(q) && !ch.group.toLowerCase().includes(q)) continue;
-    if (g && !groupsOf(ch).includes(g)) continue;
-    if (cc && countryOf(ch) !== cc) continue;
-    if (S.ui.lang && !langsOf(ch).includes(S.ui.lang)) continue;
-    const cls = needStatus ? channelStatus(ch).cls : '';
-    if (!passFilter(ch, cls, f)) continue;
-    rows.push({ ch, r: RANK[cls] ?? 0 });
-  }
-  if (S.ui.sort === 'best') rows.sort((a, b) => a.r - b.r);
-  else if (S.ui.sort === 'name') rows.sort((a, b) => a.ch.name.localeCompare(b.ch.name));
-  S.filtered = rows.map(x => x.ch);
-  S.cursor = S.current ? S.filtered.findIndex(c => c.key === S.current.key) : -1;
-  const total = sourceChannels().length;
-  $('#count').textContent = S.filtered.length === total ? `${total} channels` : `${S.filtered.length} of ${total}`;
-  if (!keepScroll) $('#list').scrollTop = 0;
-  renderList();
-  clearTimeout(scrollIdle);
-  scrollIdle = setTimeout(autoTestVisible, 400);
-}
-function scrollToIndex(i) {
-  if (i < 0) return;
-  const list = $('#list');
-  const y = i * ROW;
-  if (y < list.scrollTop || y + ROW > list.scrollTop + listHeight()) {
-    list.scrollTop = y - listHeight() / 2 + ROW / 2;
-  }
-}
-function scrollToCurrent() {
-  if (S.current) scrollToIndex(S.filtered.findIndex(c => c.key === S.current.key));
-}
-// Remote-style guide navigation: a highlighted row you move with the arrows and play with Enter.
-function moveCursor(to) {
-  const n = S.filtered.length;
-  if (!n) return;
-  S.cursor = Math.max(0, Math.min(n - 1, to));
-  scrollToIndex(S.cursor);
-  scheduleRender();
-  const ch = S.filtered[S.cursor];
-  preconnect(orderedSources(ch)[0].url);
-}
-const cursorStart = () => (S.cursor >= 0 ? S.cursor : S.current ? Math.max(0, S.filtered.findIndex(c => c.key === S.current.key)) : -1);
-const pageRows = () => Math.max(1, Math.floor(listHeight() / ROW) - 1);
 
 /* =========================================================================
    Playback: hls.js for HLS, mpegts.js for raw TS/FLV, the browser for the rest.
@@ -1003,9 +800,9 @@ const AIRPLAY = 'WebKitPlaybackTargetAvailabilityEvent' in window;
 let playToken = 0, session = null, startTimer = null;
 
 /* The TV screen around the video: test pattern when idle, static while tuning,
-   the green channel number in the corner, and the channel dial. Purely visual. */
+   the green channel number in the corner. Purely visual. */
 const TV = (() => {
-  const canvas = $('#snow'), card = $('#testcard'), osd = $('#osd'), dial = $('#dial');
+  const canvas = $('#snow'), card = $('#testcard'), osd = $('#osd');
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const ctx = canvas.getContext('2d');
   canvas.width = 160;
@@ -1037,15 +834,13 @@ const TV = (() => {
   }
   const osdChannel = ch => osdShow(`CH ${chNum(ch)}<small>${esc(ch.name)}</small>`);
   const api = {
-    state: 'standby', // standby | tuning | live | buffering | nosignal — shown on the VCR display
-    setState(s) { api.state = s; VFD.update(); window.Modern?.live(); },
+    state: 'standby', // standby | tuning | live | buffering | nosignal | sleep — shown on the connection panel
+    setState(s) { api.state = s; window.Modern?.live(); },
     idle() { snow(false); card.classList.remove('hidden'); api.setState('standby'); },
     tune(ch) {
       card.classList.add('hidden');
       snow(true);
       osdChannel(ch);
-      const n = typeof chNum(ch) === 'number' ? chNum(ch) : 0;
-      dial.style.transform = `rotate(${n * 30}deg)`;
       api.setState('tuning');
     },
     picture(ch) { snow(false); card.classList.add('hidden'); if (ch) osdChannel(ch); api.setState('live'); },
@@ -1056,90 +851,11 @@ const TV = (() => {
   return api;
 })();
 
-/* VCR-style display under the picture: what's on, how well it's playing, what's next. */
-const VFD = (() => {
-  const el = id => document.getElementById(id);
-  const box = $('#vfd');  const STATE = {
-    standby: ['STANDBY', ''], tuning: ['TUNING…', 'lvl-warn'], live: ['● LIVE', 'lvl-good'], sleep: ['☾ SLEEPING', 'lvl-warn'],
-    buffering: ['BUFFERING', 'lvl-warn'], nosignal: ['NO SIGNAL', 'lvl-bad'],
-  };
-  const two = n => String(n).padStart(2, '0');
-  function since(ms) {
-    const s = Math.floor(ms / 1000), h = Math.floor(s / 3600);
-    return h ? `${h}:${two(Math.floor(s / 60) % 60)}:${two(s % 60)}` : `${two(Math.floor(s / 60))}:${two(s % 60)}`;
-  }
-  function bufferedAhead() {
-    const t = video.currentTime;
-    for (let i = 0; i < video.buffered.length; i++) {
-      if (video.buffered.start(i) <= t + 0.5 && video.buffered.end(i) >= t) return video.buffered.end(i) - t;
-    }
-    return 0;
-  }
-  function set(id, text, cls = '') {
-    const n = el(id);
-    if (n.textContent !== text || n._html) { n.textContent = text; n._html = null; }
-    n.className = cls;
-  }
-  // Same, for values with drawn meters (only rewritten when they actually change).
-  function setHtml(id, html, cls = '') {
-    const n = el(id);
-    if (n._html !== html) { n.innerHTML = html; n._html = html; }
-    n.className = cls;
-  }
-  // 8-segment buffer meter drawn as small blocks: one segment per 4 seconds loaded ahead.
-  const bufMeter = full => `<i class="bufm" aria-hidden="true">${Array.from({ length: 8 }, (_, i) => `<b${i < full ? '' : ' class="off"'}></b>`).join('')}</i>`;
-  function update() {
-    if (MODERN) return; // the VCR display isn't shown on the modern screen
-    const ch = S.current;
-    const s = session && ch && session.ch.key === ch.key ? session : null;
-    const [stateText, stateCls] = STATE[TV.state] || STATE.standby;
-    box.classList.toggle('standby', !ch);
-    set('vfdCh', ch ? String(chNum(ch)) : '--');
-    set('vfdName', ch ? ch.name.toUpperCase() : 'PICK A CHANNEL');
-    set('vfdState', stateText, stateCls);
-    if (ch) {
-      const st = channelStatus(ch);
-      setHtml('vfdSig', `${sigHtml(st.cls)} ${esc((st.label || 'UNTESTED').toUpperCase())}`, 'lvl-' + st.cls);
-    } else setHtml('vfdSig', sigHtml('untested'));
-    // Picture: resolution, plus bitrate when the player knows it.
-    let pic = '—';
-    if (s?.started && video.videoHeight) {
-      pic = `${video.videoHeight}p`;
-      const lvl = hls?.levels?.[hls.currentLevel];
-      const kbps = lvl?.bitrate ? lvl.bitrate / 1000 : mpeg?.statisticsInfo?.speed ? mpeg.statisticsInfo.speed * 8 : 0;
-      if (kbps) pic += ` · ${(kbps / 1000).toFixed(1)}M`;
-    }
-    set('vfdPic', pic);
-    // Buffer meter: 32 seconds full scale; 8 blocks on desktop, 4 on a phone.
-    if (s?.started) {
-      const sec = bufferedAhead();
-      const full = Math.min(8, Math.round(sec / 4));
-      setHtml('vfdBuf', `${bufMeter(full)} ${Math.round(sec)}s`, sec < 3 ? 'lvl-bad' : sec < 8 ? 'lvl-warn' : 'lvl-good');
-    } else setHtml('vfdBuf', bufMeter(0));
-    set('vfdTime', s?.liveAt ? since(Date.now() - s.liveAt) : '--:--');
-    const kind = nativeHls ? 'HLS' : { hls: 'HLS', mpegts: 'TS', native: 'DIRECT' }[engine] || '';
-    set('vfdSrc', s ? `${s.idx + 1}/${s.order.length}${kind ? ' · ' + kind : ''}` : ch ? `${ch.sources.length} AVAIL` : '—');
-    // Next channel in the guide, with its signal so you know before you switch.
-    const i = ch ? S.filtered.findIndex(c => c.key === ch.key) : -1;
-    const next = S.filtered[(i + 1) % Math.max(S.filtered.length, 1)];
-    if (next && next !== ch) {
-      const st = channelStatus(next);
-      setHtml('vfdNext', `${chNum(next)} ${esc(next.name.toUpperCase())} ${sigHtml(st.cls)}`, 'lvl-' + st.cls);
-    } else set('vfdNext', '—');
-    const clock = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toUpperCase();
-    set('vfdClock', Sleep.active() ? `${clock} · ☾ ${Sleep.left()}` : clock, Sleep.active() ? 'lvl-warn' : '');
-  }
-  setInterval(() => { if (!document.hidden) update(); }, 1000);
-  $('#vfdNextBtn').addEventListener('click', () => step(1));
-  return { update };
-})();
-
-/* Sleep timer: each press adds a 30-minute step up to 3 hours, then turns it off.
+/* Sleep timer: the sleep selector sets it (set), the S key adds 30 minutes up to 3 hours, then off (cycle).
    At the end the sound fades out over 10 seconds and the channel stops. */
 const Sleep = (() => {
   const STEPS = [0, 30, 60, 90, 120, 150, 180]; // minutes
   const FADE_MS = 10000;
-  const btn = $('#sleepBtn'), lbl = $('#sleepLbl');
   let step = 0, endsAt = 0, timer = 0, fadeFrom = null;
   const two = n => String(n).padStart(2, '0');
   function fmt(ms) {
@@ -1147,12 +863,6 @@ const Sleep = (() => {
     return h ? `${h}:${two(Math.floor(s / 60) % 60)}:${two(s % 60)}` : `${Math.floor(s / 60)}:${two(s % 60)}`;
   }
   const words = min => (min < 60 ? `${min} min` : `${Math.floor(min / 60)} h${min % 60 ? ` ${min % 60} min` : ''}`);
-  function render() {
-    const on = endsAt > 0;
-    lbl.textContent = on ? fmt(endsAt - Date.now()) : 'SLEEP';
-    btn.classList.toggle('on', on);
-    btn.setAttribute('aria-label', on ? `Sleep timer: ${fmt(endsAt - Date.now())} left` : 'Sleep timer: off');
-  }
   function restoreVolume() {
     if (fadeFrom !== null) { video.volume = fadeFrom; fadeFrom = null; }
   }
@@ -1160,8 +870,6 @@ const Sleep = (() => {
     clearInterval(timer);
     restoreVolume();
     step = 0; endsAt = 0;
-    render();
-    VFD.update();
   }
   function finish() {
     const vol = fadeFrom;
@@ -1174,7 +882,6 @@ const Sleep = (() => {
     }
     if (vol !== null) video.volume = vol; // back to your normal level for next time
     fadeFrom = null;
-    render();
     TV.setState('sleep');
     if (S.current) showOverlay('<b>☾ SLEEP TIMER</b><div class="muted">Time’s up, so the sound is off.</div>', [['resume', 'Resume watching']]);
   }
@@ -1185,7 +892,6 @@ const Sleep = (() => {
       if (fadeFrom === null) fadeFrom = video.volume;
       video.volume = Math.max(0, fadeFrom * (left / FADE_MS));
     }
-    render();
   }
   function cycle() {
     step = (step + 1) % STEPS.length;
@@ -1195,8 +901,6 @@ const Sleep = (() => {
     endsAt = Date.now() + min * 60000;
     clearInterval(timer);
     timer = setInterval(tick, 250);
-    render();
-    VFD.update();
     toast(`Sleep timer: sound off in ${words(min)}`);
     TV.osdShow(`☾ SLEEP<small>${fmt(min * 60000)}</small>`, 2000);
   }
@@ -1208,12 +912,9 @@ const Sleep = (() => {
     endsAt = Date.now() + min * 60000;
     clearInterval(timer);
     timer = setInterval(tick, 250);
-    render();
-    VFD.update();
     toast(`Sleep timer: sound off in ${words(min)}`);
     TV.osdShow(`☾ SLEEP<small>${fmt(min * 60000)}</small>`, 2000);
   }
-  btn.addEventListener('click', cycle);
   return {
     cycle,
     set,
@@ -1285,14 +986,11 @@ function playChannel(ch, startUrl) {
   teardown();
   S.current = ch;
   S.ui.lastKey = ch.key;
-  const idx = S.filtered.findIndex(c => c.key === ch.key);
-  if (idx >= 0) S.cursor = idx; // the guide highlight follows what you tune to
   saveUi();
   let order = orderedSources(ch);
   if (startUrl) order = [order.find(s => s.url === startUrl), ...order.filter(s => s.url !== startUrl)].filter(Boolean);
   session = { ch, order, idx: -1 };
   scheduleRender();
-  scrollToCurrent();
   nextSource();
 }
 
@@ -1430,7 +1128,6 @@ function stopChannel() {
   TV.idle();
   scheduleRender();
 }
-const isPlaying = () => !!session?.started && !video.paused;
 
 // Leaving a source that never started counts as a failure if we waited long enough.
 function leaveSession() {
@@ -1462,7 +1159,7 @@ video.addEventListener('playing', () => {
   h.plays++;
   h.lastPlay = Date.now();
   if (ms > S.settings.slowStartSec * 1000) { h.slow++; h.lastResult = 'slow'; }
-  else { h.ok++; h.lastResult = 'ok'; lightUp(s.ch); }
+  else { h.ok++; h.lastResult = 'ok'; }
   s.recorded = true;
   saveH(h);
   // Warm up the connection to the next channel so switching feels instant.
@@ -1522,19 +1219,11 @@ function hideOverlay() { $('#overlay').classList.add('hidden'); }
 
 function renderNow() {
   const ch = S.current;
-  for (const b of document.querySelectorAll('.rate button, #prevBtn, #nextBtn')) b.disabled = !ch;
+  for (const b of document.querySelectorAll('.rate button')) b.disabled = !ch;
   if (!ch) return;
   const url = currentSourceUrl();
   const src = ch.sources.find(s => s.url === url) || ch.sources[0];
-  const st = channelStatus(ch);
   const h = S.health.get(src.url);
-  $('#nowName').innerHTML = flagHtml(ch) + esc(ch.name);
-  const cc = countryOf(ch);
-  const langNames = langsOf(ch).map(langName).join(', ');
-  $('#nowMeta').innerHTML = `CH ${chNum(ch)} · ${cc ? `${esc(countryName(cc))} · ` : ''}${langNames ? `${esc(langNames)} · ` : ''}${esc(groupLabel(ch))} · ${badgeHtml(st, 'Untested')} ${tagsHtml(ch)}`;
-  const logo = $('#nowLogo');
-  logo.classList.toggle('hidden', !ch.logo);
-  if (ch.logo) { logo.src = ch.logo; logo.onerror = () => logo.classList.add('hidden'); }
   for (const b of document.querySelectorAll('.rate [data-rate]')) {
     b.classList.toggle('on', !!b.dataset.rate && b.dataset.rate === (h?.rating || ''));
   }
@@ -1676,6 +1365,17 @@ const Presets = (() => {
     all: () => list,
     load(p) { list = norm(p); },
     set(p) { list = norm(p); DB.put('kv', list, 'presets'); scheduleRender(); },
+    // Presets are saved copies: when a playlist loads, give them that channel's latest stream links.
+    sync(byKey) {
+      let changed = false;
+      const next = list.map(p => {
+        const ch = p && byKey.get(p.key);
+        if (!ch || JSON.stringify(ch.sources) === JSON.stringify(p.sources)) return p;
+        changed = true;
+        return { ...p, name: ch.name, logo: ch.logo || p.logo, sources: ch.sources };
+      });
+      if (changed) this.set(next);
+    },
     // Put channels into the empty slots, in order, skipping ones already saved.
     fill(chs) {
       const next = list.slice();
@@ -1719,34 +1419,19 @@ function nameFromUrl(url) {
   catch { return ''; }
 }
 function renderPlaylists() {
-  const sel = $('#playlistSelect');
-  sel.innerHTML = S.playlists.length
-    ? S.playlists.map(p => `<option value="${p.id}"${p.id === S.ui.currentId ? ' selected' : ''}>${esc(p.name)} (${p.count})</option>`).join('')
-    : '<option value="">No playlists yet</option>';
   const cur = S.playlists.find(p => p.id === S.ui.currentId);
   $('#refreshPlaylistBtn').disabled = !cur?.url;
   $('#curListName').textContent = cur ? `Open: ${cur.name} (${cur.count} channels)` : 'No playlist open';
   $('#deletePlaylistBtn').disabled = !cur;
 }
-// Install a channel list: lookup maps, favorites kept in sync with the newest sources.
+// Install a channel list and its lookup maps.
 function setChannels(chs) {
   S.channels = chs;
   S.byKey = new Map(chs.map(c => [c.key, c]));
   S.numByKey = new Map(chs.map((c, i) => [c.key, i + 1]));
   S.byUrl = new Map();
-  for (const f of S.favs.values()) for (const s of f.sources || []) S.byUrl.set(s.url, S.byKey.get(f.key) || f);
   for (const c of chs) for (const s of c.sources) S.byUrl.set(s.url, c);
-  for (const f of [...S.favs.values()]) {
-    let ch = S.byKey.get(f.key);
-    if (!ch && f.key.startsWith('u:')) ch = S.byUrl.get(f.key.slice(2)); // favorite saved by an older version
-    if (!ch || !ch.sources) continue;
-    if (ch.key !== f.key) { S.favs.delete(f.key); DB.del('favs', f.key); }
-    if (ch.key !== f.key || JSON.stringify(ch.sources) !== JSON.stringify(f.sources)) {
-      const nf = { ...favRecord(ch), addedAt: f.addedAt };
-      S.favs.set(ch.key, nf);
-      DB.put('favs', nf);
-    }
-  }
+  Presets.sync(S.byKey);
 }
 async function addPlaylist({ name, url, text }) {
   if (!text) text = await fetchPlaylist(url);
@@ -1758,13 +1443,11 @@ async function addPlaylist({ name, url, text }) {
   await DB.put('kv', text, 'pl:' + id);
   S.playlists.push(meta);
   await DB.put('kv', S.playlists, 'playlists');
-  if (S.ui.status === 'fav') S.ui.status = 'all';
   await selectPlaylist(id, chs);
   toast(`Added ${chs.length} channels`);
 }
 async function selectPlaylist(id, parsed) {
   S.ui.currentId = id;
-  S.ui.group = '';
   saveUi();
   setChannels(!id ? [] : parsed || buildChannels((await DB.get('kv', 'pl:' + id)) || ''));
   const meta = S.playlists.find(p => p.id === id);
@@ -1773,10 +1456,7 @@ async function selectPlaylist(id, parsed) {
     DB.put('kv', S.playlists, 'playlists');
   }
   renderPlaylists();
-  $('#statusFilter').value = S.ui.status;
-  $('#sortSel').value = S.ui.sort || '';
-  rebuildGroups();
-  applyFilters();
+  channelsChanged();
   backgroundRefresh(S.playlists.find(p => p.id === id));
   loadLanguages();
 }
@@ -1814,8 +1494,7 @@ async function backgroundRefresh(p) {
       setChannels(chs);
       if (S.current) S.current = S.byKey.get(S.current.key) || S.current;
       renderPlaylists();
-      rebuildGroups();
-      applyFilters(true);
+      channelsChanged();
     }
     toast(`“${p.name}” updated: ${chs.length} channels`);
   } catch {
@@ -1885,7 +1564,7 @@ async function clearStats() {
   S.health.clear();
   S.hosts.clear();
   for (const old of keep) { const h = H(old.url); h.rating = old.rating; await DB.put('health', h); }
-  applyFilters(true);
+  channelsChanged();
   renderNow();
   toast('Test history cleared');
 }
@@ -1898,7 +1577,6 @@ async function eraseAll() {
 /* =========================================================================
    Wiring
    ========================================================================= */
-let scrollIdle, searchTimer, hoverTimer;
 function openAddDialog() {
   $('#addForm').reset();
   $('#addErr').textContent = '';
@@ -1918,57 +1596,12 @@ function openSettings() {
 const clamp = (v, lo, hi, d) => { v = Math.round(+v); return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d; };
 
 function wire() {
-  $('#list').addEventListener('scroll', () => {
-    scheduleRender();
-    clearTimeout(scrollIdle);
-    scrollIdle = setTimeout(autoTestVisible, 600);
-  });
-  window.addEventListener('resize', scheduleRender);
-
-  $('#listInner').addEventListener('click', e => {
-    if (e.target.closest('[data-act="add"]')) return openAddDialog();
-    if (e.target.closest('[data-act="seed"]')) { S.ui.removedDefault = false; saveUi(); return ensureDefaultPlaylist(true); }
-    const star = e.target.closest('[data-star]');
-    if (star) { e.stopPropagation(); return; }
-    const row = e.target.closest('.ch');
-    if (row) { $('#list').focus({ preventScroll: true }); playChannel(S.filtered[+row.dataset.i]); }
-  });
-  // Hovering a channel: get the player library and the stream's server connection ready.
-  $('#listInner').addEventListener('pointerover', e => {
-    const row = e.target.closest('.ch');
-    if (!row) return;
-    clearTimeout(hoverTimer);
-    hoverTimer = setTimeout(() => {
-      const ch = S.filtered[+row.dataset.i];
-      if (!ch) return;
-      loadLib('hls').catch(() => {});
-      preconnect(orderedSources(ch)[0].url);
-    }, 120);
-  });
-
-  $('#search').addEventListener('input', e => {
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => { S.ui.search = e.target.value; saveUi(); applyFilters(); }, 150);
-  });
-  $('#groupFilter').addEventListener('change', e => { S.ui.group = e.target.value; saveUi(); applyFilters(); });
-  $('#statusFilter').addEventListener('change', e => { S.ui.status = e.target.value; saveUi(); rebuildGroups(); applyFilters(); });
-  $('#sortSel').addEventListener('change', e => { S.ui.sort = e.target.value; saveUi(); applyFilters(); });
-
-  $('#testBtn').addEventListener('click', () => {
-    if (T.manual && (T.active || T.queue.length)) return stopTests();
-    const urls = testUrlsFor(S.filtered);
-    if (!urls.length) return toast(S.filtered.length ? 'Everything here was checked in the last 6 hours' : 'Nothing to test');
-    if (urls.length > 1500 && !confirm(`Test ${urls.length} channels? This can take a while. Tip: pick a group or country first.`)) return;
-    queueTests(urls, { manual: true });
-  });
   $('#testOneBtn').addEventListener('click', () => {
     if (!S.current) return;
     queueTests(S.current.sources.map(s => s.url), { force: true, front: true, show: true });
     toast(S.current.sources.length > 1 ? `Testing all ${S.current.sources.length} sources…` : 'Testing…');
   });
 
-  $('#playlistSelect').addEventListener('change', e => selectPlaylist(e.target.value));
-  $('#addPlaylistBtn').addEventListener('click', openAddDialog);
   $('#refreshPlaylistBtn').addEventListener('click', refreshPlaylist);
   $('#deletePlaylistBtn').addEventListener('click', deletePlaylist);
 
@@ -2004,7 +1637,6 @@ function wire() {
     $('#plName').value = opt.dataset.name || 'iptv-org: ' + opt.textContent.trim();
   });
 
-  $('#settingsBtn').addEventListener('click', openSettings);
   $('#setForm').addEventListener('submit', e => {
     if (e.submitter?.value !== 'save') return;
     const d = DEFAULT_SETTINGS;
@@ -2027,9 +1659,6 @@ function wire() {
   $('#clearStatsBtn').addEventListener('click', clearStats);
   $('#clearAllBtn').addEventListener('click', eraseAll);
 
-  $('#prevBtn').addEventListener('click', () => step(-1));
-  $('#nextBtn').addEventListener('click', () => step(1));
-  $('#dial').addEventListener('click', () => step(1));
   $('#sourceSel').addEventListener('change', e => S.current && playChannel(S.current, e.target.value));
   for (const b of document.querySelectorAll('[data-rate]')) b.addEventListener('click', () => setRating(b.dataset.rate));
   $('#copyBtn').addEventListener('click', copyLink);
@@ -2047,30 +1676,17 @@ function wire() {
     else if (a === 'resume' && S.current) playChannel(S.current); // back to the live picture
   });
 
-  $('#countryFilter').addEventListener('change', e => { S.ui.country = e.target.value; saveUi(); applyFilters(); });
-  $('#langFilter').addEventListener('change', e => { S.ui.lang = e.target.value; saveUi(); applyFilters(); });
-
   // Keyboard / TV remote:
-  //   ↑ ↓  move the highlight in the guide     Enter / OK  play it
-  //   PgUp PgDn  jump a page                   Home End    first / last
-  //   ← →  previous / next channel (zap)       Esc         back to what's playing
-  //   0-9  type a channel number               F favorite · Space pause
+  //   ↑ ↓ ← →  previous / next channel     0-9  type a channel number
+  //   Space  pause                          S    sleep timer (Esc is modern.js's: closes the menu or picker)
   document.addEventListener('keydown', e => {
     if (e.target.closest?.('input, textarea, select, dialog') || e.ctrlKey || e.metaKey || e.altKey) return;
     const onButton = !!e.target.closest?.('button, a, video');
     const k = e.key;
     if (/^[0-9]$/.test(k)) return typeChannelDigit(k);
     const handled = () => e.preventDefault();
-    // The modern screen has no highlighted guide row: ↑ ↓ change channel like a remote, Esc is modern.js's.
-    if (MODERN && ['ArrowDown', 'ArrowUp'].includes(k)) { handled(); step(k === 'ArrowDown' ? 1 : -1); return; }
-    if (MODERN && ['PageDown', 'PageUp', 'Home', 'End', 'Enter', 'Escape'].includes(k)) return;
-    if (k === 'ArrowDown' || k === 'ArrowUp') { handled(); const c = cursorStart(); moveCursor(c < 0 ? 0 : c + (k === 'ArrowDown' ? 1 : -1)); }
-    else if (k === 'PageDown' || k === 'PageUp') { handled(); moveCursor(Math.max(0, cursorStart()) + (k === 'PageDown' ? 1 : -1) * pageRows()); }
-    else if (k === 'Home' || k === 'End') { handled(); moveCursor(k === 'Home' ? 0 : S.filtered.length - 1); }
-    else if (k === 'Enter' && !onButton && S.cursor >= 0 && S.filtered[S.cursor]) { handled(); playChannel(S.filtered[S.cursor]); }
-    else if (['ArrowRight', 'n', 'ChannelUp', 'MediaTrackNext'].includes(k)) { handled(); step(1); }
-    else if (['ArrowLeft', 'p', 'ChannelDown', 'MediaTrackPrevious'].includes(k)) { handled(); step(-1); }
-    else if (k === 'Escape') { S.cursor = S.current ? S.filtered.findIndex(c => c.key === S.current.key) : -1; scrollToCurrent(); scheduleRender(); }
+    if (['ArrowDown', 'ArrowRight', 'n', 'ChannelUp', 'MediaTrackNext'].includes(k)) { handled(); step(1); }
+    else if (['ArrowUp', 'ArrowLeft', 'p', 'ChannelDown', 'MediaTrackPrevious'].includes(k)) { handled(); step(-1); }
     else if (k === ' ' && !onButton && session?.started) { handled(); video.paused ? video.play().catch(() => {}) : video.pause(); }
     else if (k === 's' || k === 'S') Sleep.cycle();
   });
@@ -2090,7 +1706,7 @@ function addRecent(ch) {
   delete rec.addedAt;
   S.recent = [rec, ...S.recent.filter(r => r.key !== ch.key)].slice(0, RECENT_MAX);
   DB.put('kv', S.recent, 'recent');
-  if (S.ui.status === 'recent') { rebuildGroups(); applyFilters(true); }
+  scheduleRender();
 }
 // Like a remote: type a channel number, it tunes in after a short pause.
 let numBuf = '', numTimer;
@@ -2142,7 +1758,6 @@ async function init() {
     saveUi();
     if (S.favs.size) Presets.fill([...S.favs.values()].sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0)));
   }
-  $('#search').value = S.ui.search;
   const vol = Number(S.ui.volume ?? 1);
   video.volume = Number.isFinite(vol) ? Math.min(1, Math.max(0, vol)) : 1;
   video.muted = !!S.ui.muted;
@@ -2154,7 +1769,7 @@ async function init() {
 
   // Show (but don't autoplay) the channel you watched last.
   const last = S.byKey.get(S.ui.lastKey) || Presets.all().find(p => p?.key === S.ui.lastKey) || S.favs.get(S.ui.lastKey) || (S.ui.lastUrl && S.byUrl.get(S.ui.lastUrl));
-  if (last?.sources) { S.current = last; scrollToCurrent(); scheduleRender(); }
+  if (last?.sources) { S.current = last; scheduleRender(); }
   renderNow();
 
   // A share link (#share=…) carries favorites or a playlist: offer to add them.
@@ -2179,7 +1794,7 @@ async function init() {
 }
 async function loadWithSpinner(pl) {
   S.loading = `Loading ${pl.name || 'playlist'}…`;
-  renderList();
+  scheduleRender();
   try {
     await addPlaylist(pl);
     return true;
@@ -2188,7 +1803,7 @@ async function loadWithSpinner(pl) {
     return false;
   } finally {
     S.loading = '';
-    renderList();
+    scheduleRender();
   }
 }
 // Automatic channel list: downloads the iptv-org list when there is none, retrying with a
@@ -2201,7 +1816,7 @@ async function ensureDefaultPlaylist(now = false) {
   if (S.playlists.length || S.ui.removedDefault || S.loading) return;
   if (now) retryCount = 0;
   S.loading = `Loading ${DEFAULT_PLAYLIST.name}…`;
-  renderList();
+  scheduleRender();
   try {
     await addPlaylist(DEFAULT_PLAYLIST);
     S.loadError = '';
@@ -2212,7 +1827,7 @@ async function ensureDefaultPlaylist(now = false) {
     retryTimer = setTimeout(ensureDefaultPlaylist, pause);
   } finally {
     S.loading = '';
-    renderList();
+    scheduleRender();
   }
 }
 
