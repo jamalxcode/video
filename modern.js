@@ -141,7 +141,7 @@ window.Modern = (() => {
         (g, n) => pick('genre', genre, g, safe(g), n))).join('') + '</div>';
     const rows = items.slice(0, 350).map((ch, i) => {
       const on = S.current?.key === ch.key;
-      return `<div class="m-st-row${verified(ch) ? ' m-verified' : ''}${on ? ' m-on' : ''}"><button type="button" data-ch="${i}" class="m-st-select" title="${safe(ch.name)}"${on ? ' aria-current="true"' : ''}>${logo(ch)}<span class="m-st-text"><strong>${flagHtml(ch)}${safe(ch.name)}</strong>${marker(ch)}</span></button></div>`;
+      return `<div class="m-st-row${verified(ch) ? ' m-verified' : ''}${on ? ' m-on' : ''}"><button type="button" data-ch="${i}" class="m-st-select" title="${safe(ch.name)}"${on ? ' aria-current="true"' : ''}>${logo(ch)}<span class="m-st-text"><strong>${flagHtml(ch)}${safe(ch.name)}</strong>${langTag(ch) ? `<small class="m-lang" title="${safe(langsOf(ch).map(langName).join(', '))}">${safe(langTag(ch))}</small>` : ''}${marker(ch)}</span></button></div>`;
     }).join('');
     const chCol = `<div class="m-column m-column-stations"><h3>Channels <small>${items.length}</small></h3>` + (rows || emptyText()) +
       (items.length > 350 ? '<p class="m-more">Showing the first 350. Pick a country or genre, or search, to narrow it down.</p>' : '') + '</div>';

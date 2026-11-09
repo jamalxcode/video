@@ -351,3 +351,9 @@ body.modern-ui .toast{position:fixed;left:50%;transform:translateX(-50%);max-wid
 }
 @media(prefers-reduced-motion:reduce){#modernApp .osd{transition:none}#modernApp .spinner,#modernApp .m-spin{animation-duration:2.4s!important}}
 @media(min-width:1050px) and (max-width:1330px){#modernApp .m-navitem .m-ico{display:inline-grid}}
+/* Counts never break across lines (1234, not 123 / 4); long names wrap or shorten instead */
+#modernApp .m-column>button small{flex:none;white-space:nowrap;padding-left:6px;font-variant-numeric:tabular-nums}
+#modernApp .m-column>button span{flex:none}
+#modernApp .m-column h3 small{white-space:nowrap}
+/* A channel's language beside its name (from the playlist or iptv-org): FAS, KUR, ENG… */
+#modernApp .m-st-text .m-lang{flex:none;font-size:9px;letter-spacing:.06em;color:#9fb6ca;border:1px solid #4e667e;border-radius:4px;padding:1px 3px}
