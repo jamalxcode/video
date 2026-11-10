@@ -57,6 +57,13 @@ The app's own files are kept in the browser by a small service worker (`sw.js`),
 
 Playlists, presets, ratings, test results and settings are stored in the browser's IndexedDB. Nothing is uploaded anywhere, so every person and every browser has its own separate list. To move your data to another device, use **⚙ → Export backup**, then **Import backup** on the other device.
 
+## Design notes
+
+- [Design decisions](docs/design/DECISIONS.md): what was decided and why (AirPlay, Free-TV, the radio-style screen, presets only, languages and flags).
+- [Implementation and testing notes](docs/design/IMPLEMENTATION-NOTES.md): how the pieces fit, what was tested, what wasn't.
+- [Conversation record](docs/conversations/2026-11-02_to_2026-11-10.md): the requests behind each change.
+- The design before the 2026-11-09 redesign is kept on the branch `backup/pre-redesign-2026-11-09`.
+
 ## Code
 
 Plain HTML, CSS and JS, with no build step.
