@@ -22,6 +22,7 @@ python3 -m http.server 8000
 - `app.js`: the engine: IndexedDB storage (`indexedDB.open('m3u-player', 2)`; presets under `kv:presets`), playlists (several space-separated URLs per playlist, merged), M3U parsing/merging, languages (`LANG_SAME` merges duplicate ISO codes), the stream tester, playback (native HLS on AirPlay-capable Safari, hls.js, mpegts.js, native), TV picture (test card, static, OSD), sleep timer, `Presets` (18 slots), share links (data after `#`), backup export/import, keyboard.
 - `modern.js`: the screen: picker (Collections -> Languages -> Countries -> Genres -> Channels), now playing/connection panel, presets, recently watched, menu, Media Session. `LANG_HOME` maps language codes to flag countries. Redraws every 0.9 s based on a change signature; `S.rev` / `scheduleRender()` / `channelsChanged()` -> `Modern.sync()` are the hooks between the two files.
 - `modern.css`: screen and dialog styles plus the retro TV effects.
+- `manifest.webmanifest` + `icon-*.png`: installable app.
 - `sw.js`: offline shell. Page is network-first (4 s timeout, then cache); same-origin app files stale-while-revalidate; CDN libs (hls.js, mpegts.js, flag polyfill, Google Fonts) cache-first; `lists/` and all streams/iptv-org/mirror requests are never cached.
 - `lists/free-tv.m3u8`: same-origin copy of the Free-TV playlist (works where raw.githubusercontent.com is blocked; jsDelivr can't serve it).
 - `mirror/mirror.js`: Cloudflare Worker that proxies/caches iptv-org playlist and API files for 6 h. Deployed separately to Cloudflare (no wrangler config in repo); not part of the Pages site.
@@ -39,12 +40,12 @@ All user data (playlists, presets, ratings, test results, settings) lives in the
 ## Conventions and gotchas
 
 - With each release bump BOTH:
-  - asset query strings in `index.html` (currently `modern.css?v=3`, `app.js?v=36`, `modern.js?v=9`) for the files that changed, and
-  - `CACHE` in `sw.js` (currently `video-shell-v15`).
+  - asset query strings in `index.html` (currently `modern.css?v=4`, `app.js?v=36`, `modern.js?v=10`) for the files that changed, and
+  - `CACHE` in `sw.js` (currently `video-shell-v16`).
   Otherwise returning visitors keep stale files.
 - If you add a new app file, add it to `SHELL` in `sw.js`.
 - Keep the GoatCounter snippet at the end of `index.html` intact (endpoint `https://salacompany.goatcounter.com/count`, skipped on localhost, path prefixed with `location.host`).
 - Don't delete or reshape user data without a one-time, additive migration (favorites -> presets is the model, flagged in `S.ui.favsToPresets`).
 - Browser limits are expected, not bugs: HTTP streams on an HTTPS page, CORS-blocked servers (marked Blocked), custom User-Agent/Referer headers can't be set.
-- Mobile matters: phones get a hamburger menu and the picker slides over the screen; no volume slider on phones. Check phone (~390px) and desktop layouts.
+- Mobile matters: phones get a hamburger menu and the picker slides over the screen; landscape phones / short wide screens get a vertical side rail (`m-rail`); folding screens with two viewport segments get one pane per screen (`m-dual-h` / `m-dual-v`); everything sits inside `env(safe-area-inset-*)` on all four sides; touch controls are ≥ 44 px; no volume slider on touch screens. Check phone (~390px), landscape, fold and desktop layouts; see the device-testing section in `docs/design/IMPLEMENTATION-NOTES.md` for how to emulate safe areas and hinges.
 - The pre-redesign version is kept on the remote branch `backup/pre-redesign-2026-11-09` (per README).

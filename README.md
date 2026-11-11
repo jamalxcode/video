@@ -41,6 +41,7 @@ The layout and channel picker follow [radio.sala.company](https://radio.sala.com
 - **Remembers volume** and mute between channels and visits.
 - **Auto-skip** (in Settings): jumps to the next working channel when one fails or times out.
 - **Sleep timer**: the sleep selector (or `S`, which adds 30 minutes at a time up to 3 hours, then off). At the end the sound fades out over 10 seconds and the channel stops, with a button to resume.
+- **Every device**: phones, tablets, foldables (including the iPhone Duo, folded and unfolded) and desktops. The layout keeps clear of notches, Dynamic Islands and side system bars on any edge; landscape phones and narrow outer displays get a vertical side rail; on a folding screen the TV and the channel picker each get their own screen and nothing sits under the hinge. Folding, rotating or resizing never interrupts the channel, and your place in the picker survives a reload. Installable as an app (Add to Home Screen / Install).
 - **Lock screen and AirPlay remote**: the channel's name and logo show in Control Center and on the lock screen, with play/pause and next/previous channel (where the browser supports it).
 - **Keyboard / TV remote**: ↑↓ or ←→ previous/next channel, type a channel number to jump, `S` sleep timer, Space pause, Esc closes the menu or picker.
 - **Retro picture**: scanlines and static between channels can be switched off in Settings.
@@ -61,7 +62,7 @@ Playlists, presets, ratings, test results and settings are stored in the browser
 
 - [Design decisions](docs/design/DECISIONS.md): what was decided and why (AirPlay, Free-TV, the radio-style screen, presets only, languages and flags).
 - [Implementation and testing notes](docs/design/IMPLEMENTATION-NOTES.md): how the pieces fit, what was tested, what wasn't.
-- [Conversation record](docs/conversations/2026-11-02_to_2026-11-10.md): the requests behind each change.
+- [Conversation record](docs/conversations/2026-11-02_to_2026-11-11.md): the requests behind each change.
 - The design before the 2026-11-09 redesign is kept on the branch `backup/pre-redesign-2026-11-09`.
 
 ## Code

@@ -6,7 +6,11 @@ window.Modern = (() => {
   if (!root) return null;
   const $m = id => document.getElementById(id);
   const WIDE = '(min-width: 1050px)';
+  // Short, wide screens (phones in landscape, narrow outer displays): a vertical side rail replaces the top bar.
+  const RAIL = '(orientation: landscape) and (max-height: 560px) and (min-width: 560px)';
+  let dual = ''; // a folding screen split by a hinge: 'h' side by side, 'v' top and bottom, '' one screen
   let browserOpen = matchMedia(WIDE).matches;
+  let pickerChoice = browserOpen; // the picker as you last left it (open or closed), apart from folds
   let navOpen = false;
   // What the picker shows: a playlist ('list') or recently watched, narrowed by language, country, genre and search.
   let view = 'list', lang = '', country = '', genre = '', query = '';
@@ -37,15 +41,21 @@ window.Modern = (() => {
     return `<span class="m-status m-status-${cls}" aria-label="${label}" title="${safe(st.tip ? label + ' · ' + st.tip : label)}">${text}</span>`;
   }
 
-  /* ---------- overlays: the picker and the menu cover the screen on narrow widths ---------- */
-  const overlayMode = () => !matchMedia(WIDE).matches;
+  /* ---------- layouts: one screen (narrow, wide, rail) or two screens either side of a hinge ---------- */
+  const railMode = () => !dual && matchMedia(RAIL).matches;
+  // The picker covers the screen (narrow and rail layouts) or sits beside it (wide, and folds: its own screen).
+  const overlayMode = () => !dual && (railMode() || !matchMedia(WIDE).matches);
+  // The menu is a drawer, except on wide screens and in the rail, where it's always there.
+  const navOverlay = () => !railMode() && (!!dual || !matchMedia(WIDE).matches);
   function syncInert() {
-    const narrow = overlayMode();
-    root.querySelector('.m-central').inert = narrow && (browserOpen || navOpen);
-    $m('mBrowser').inert = (narrow && navOpen) || !browserOpen;
-    $m('mNav').inert = narrow && !navOpen;
+    root.querySelector('.m-central').inert = (overlayMode() && browserOpen) || (navOverlay() && navOpen);
+    $m('mBrowser').inert = !browserOpen || (navOverlay() && navOpen);
+    $m('mNav').inert = navOverlay() && !navOpen;
   }
-  function openBrowser(open) {
+  // auto: opened or closed by a fold, not by you; after folding back the picker returns to your choice.
+  function openBrowser(open, auto = false) {
+    if (dual && !open) return; // on a fold the picker has its own screen
+    if (!auto) pickerChoice = open;
     browserOpen = open;
     root.classList.toggle('m-browser-open', open);
     $m('mChannelToggle').setAttribute('aria-expanded', String(open));
@@ -113,7 +123,7 @@ window.Modern = (() => {
   function draw() {
     // Another playlist opened (added, removed, imported, shared): show its channels, not the old filters.
     if (S.ui.currentId !== shownListId) {
-      if (shownListId !== undefined && view === 'list') { lang = ''; country = ''; genre = ''; query = ''; $m('mSearch').value = ''; }
+      if (shownListId && view === 'list') { lang = ''; country = ''; genre = ''; query = ''; $m('mSearch').value = ''; }
       shownListId = S.ui.currentId;
     }
     compute();
@@ -169,6 +179,7 @@ window.Modern = (() => {
     [...holder.children].forEach((c, i) => { c.scrollTop = ys[i] || 0; });
     fitMergedNames();
     autoTestSoon();
+    restoreScroll();
   }
   function emptyText() {
     if (S.loading) return `<p class="m-empty"><span class="m-spin"></span>${safe(S.loading)}</p>`;
@@ -430,7 +441,7 @@ window.Modern = (() => {
     if (d.genre !== undefined) { genre = d.genre; refresh(); return scrollColumns(4); }
     if (d.ch !== undefined) {
       const ch = items[+d.ch];
-      if (ch) { chosenPreset = -1; playChannel(ch); openBrowser(false); }
+      if (ch) { chosenPreset = -1; playChannel(ch); if (!dual) openBrowser(false); }
       return;
     }
     if (d.recent !== undefined) { const r = S.recent[+d.recent]; if (r) { chosenPreset = -1; playChannel(channelFor(r)); } return; }
@@ -462,16 +473,93 @@ window.Modern = (() => {
     if (navOpen) { e.preventDefault(); openNav(false); $m('mNavToggle').focus({ preventScroll: true }); }
     else if (browserOpen && overlayMode()) { e.preventDefault(); openBrowser(false); }
   });
-  addEventListener('resize', () => {
-    if (!overlayMode()) openNav(false);
+  /* ---------- devices: folds, rail, keyboard; nothing here reloads or moves the video ---------- */
+  // Folding screens report two segments (Chrome/Edge: window.viewport.segments). Each pane gets its own
+  // screen and nothing is placed under the hinge.
+  function readSegments() {
+    const segs = window.viewport?.segments || window.visualViewport?.segments;
+    return segs && segs.length === 2 ? [...segs].sort((a, b) => a.x - b.x || a.y - b.y) : null;
+  }
+  function layout() {
+    const segs = readSegments();
+    const mode = segs ? (Math.abs(segs[0].y - segs[1].y) < 2 ? 'h' : 'v') : '';
+    if (mode !== dual) {
+      const was = dual;
+      dual = mode;
+      root.classList.toggle('m-dual-h', mode === 'h');
+      root.classList.toggle('m-dual-v', mode === 'v');
+      if (mode && !was) { openNav(false); openBrowser(true, true); }
+      // Folded back to one screen: the picker goes back to how you last left it.
+      if (!mode && was) openBrowser(pickerChoice, true);
+    }
+    if (segs) {
+      const shell = root.querySelector('.m-shell').getBoundingClientRect(), [a, b] = segs;
+      const first = mode === 'h' ? a.x + a.width - shell.left : a.y + a.height - shell.top;
+      const hinge = mode === 'h' ? b.x - (a.x + a.width) : b.y - (a.y + a.height);
+      root.style.setProperty('--seg-first', Math.max(0, Math.round(first)) + 'px');
+      root.style.setProperty('--seg-hinge', Math.max(0, Math.round(hinge)) + 'px');
+    }
+    const rail = railMode();
+    if (root.classList.contains('m-rail') !== rail) root.classList.toggle('m-rail', rail);
+    if (!navOverlay()) openNav(false);
     syncInert();
     if (browserOpen) fitMergedNames();
-  });
+  }
+  addEventListener('resize', layout);
+  addEventListener('orientationchange', layout);
+  window.viewport?.addEventListener?.('segmentschange', layout);
+  for (const q of [WIDE, RAIL, '(horizontal-viewport-segments: 2)', '(vertical-viewport-segments: 2)']) matchMedia(q).addEventListener?.('change', layout);
+  navigator.devicePosture?.addEventListener?.('change', layout); // folded / continuous / half-open
+  // The on-screen keyboard: how much of the page it covers (iOS doesn't shrink the page for it),
+  // so dialogs and the toast stay above it.
+  const vv = window.visualViewport;
+  function keyboardInset() {
+    const kb = vv ? Math.max(0, Math.round(innerHeight - vv.height - vv.offsetTop)) : 0;
+    document.documentElement.style.setProperty('--kb', kb + 'px');
+  }
+  vv?.addEventListener('resize', keyboardInset);
+  vv?.addEventListener('scroll', keyboardInset);
+
+  // Keep what you were doing if the page reloads (some phones reload a tab after folding or in the background):
+  // the picker's collection, filters, search and scroll, the details section, and the page scroll.
+  const SAVE_KEY = 'video-screen';
+  function saveState() {
+    try {
+      const cols = [...$m('mColumns').children].map(c => c.scrollTop);
+      sessionStorage.setItem(SAVE_KEY, JSON.stringify({ view, lang, country, genre, query, browserOpen: pickerChoice,
+        details: $m('mDetails').open, left: $m('mColumns').scrollLeft, cols, page: root.querySelector('.m-center-scroll').scrollTop }));
+    } catch { /* private mode or storage blocked */ }
+  }
+  let restore = null;
+  try { restore = JSON.parse(sessionStorage.getItem(SAVE_KEY) || 'null'); } catch { restore = null; }
+  if (restore) {
+    ({ view = 'list', lang = '', country = '', genre = '', query = '' } = restore);
+    if (view !== 'list' && view !== 'recent') view = 'list';
+    $m('mSearch').value = query;
+    $m('mDetails').open = !!restore.details;
+    if (typeof restore.browserOpen === 'boolean') pickerChoice = browserOpen = restore.browserOpen || matchMedia(WIDE).matches;
+  }
+  // Scroll positions come back once the channels are there to scroll.
+  function restoreScroll() {
+    if (!restore || !items.length) return;
+    const r = restore;
+    restore = null;
+    requestAnimationFrame(() => {
+      const holder = $m('mColumns');
+      holder.scrollLeft = r.left || 0;
+      [...holder.children].forEach((c, i) => { c.scrollTop = r.cols?.[i] || 0; });
+      root.querySelector('.m-center-scroll').scrollTop = r.page || 0;
+    });
+  }
+  addEventListener('pagehide', saveState);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) saveState(); });
+  setInterval(saveState, 5000);
 
   for (const ev of ['playing', 'pause', 'waiting']) video.addEventListener(ev, () => paintLive());
   root.classList.toggle('m-browser-open', browserOpen);
   $m('mChannelToggle').setAttribute('aria-expanded', String(browserOpen));
-  syncInert();
+  layout();
+  keyboardInset();
   setInterval(() => { if (!document.hidden) refresh(); }, 900);
   refresh();
   // app.js calls sync() whenever the channels or their order change.

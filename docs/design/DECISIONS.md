@@ -1,9 +1,9 @@
 # video.sala.company: design decisions
 
-**Updated:** 2026-11-10
+**Updated:** 2026-11-11
 **Live:** https://video.sala.company (GitHub Pages, deployed from `main`)
 **Pre-redesign rollback:** branch `backup/pre-redesign-2026-11-09` at `6a6b585` (the wood-cabinet TV and cable guide). Don't overwrite it.
-**Related:** [implementation and testing notes](IMPLEMENTATION-NOTES.md) · [conversation record](../conversations/2026-11-02_to_2026-11-10.md) · the radio this design follows: [jamalxcode/radio](https://github.com/jamalxcode/radio) and its `docs/design/DECISIONS-2026-11-09.md`
+**Related:** [implementation and testing notes](IMPLEMENTATION-NOTES.md) · [conversation record](../conversations/2026-11-02_to_2026-11-11.md) · the radio this design follows: [jamalxcode/radio](https://github.com/jamalxcode/radio) and its `docs/design/DECISIONS-2026-11-09.md`
 
 This file records what the owner decided and why, newest decisions folded in. The code on `main` is the source of truth for what shipped; update this file with each new decision.
 
@@ -54,6 +54,17 @@ The owner asked for the radio's new layout and station picker, **keeping the vid
 - The hidden old controls (guide list, filters, cursor navigation, VCR display, dial, sleep knob, playlist menu) and the code behind them were removed (about 410 lines). `style.css` was replaced by `modern.css`.
 - Review fixes: the connection panel updates the instant the player changes state; Recently watched redraws when its order changes; lock-screen / Control Center controls (Media Session: name, logo, play/pause, next/previous).
 
+## 9. iPhone Duo and every other device (2026-11-11)
+The owner set ten requirements: iPhone Duo folded and unfolded plus phones, tablets, foldables and desktops; automatic adaptation to sizes, orientations and fold transitions; the Duo's vertical Dynamic Island, side-mounted system UI and asymmetric safe areas; side navigation and vertical toolbars on the outer display; controls clear of gestures, edges and the fold; state and playback kept through folding and rotation; dialogs and keyboards fully visible; touch, mouse, keyboard and accessibility; Safari, Chrome, Android and installed apps; the same features everywhere.
+- **Safe areas on every side.** The whole screen sits inside `env(safe-area-inset-*)` top, right, bottom and left independently, so a camera cutout or island on any edge, a side-mounted system bar or the home indicator never covers a control. The background still fills the display.
+- **Side rail on short, wide screens** (landscape phones and a narrow outer display, `landscape` and height ≤ 560 px): the menu becomes a vertical toolbar (Home, Recently watched, Channels, Add playlist, Settings), the top bar goes away, the TV picture fills the height with the channel details beside it, and the picker slides in next to the rail.
+- **Folding screens:** when the browser reports two screen segments (`window.viewport.segments`), each pane gets its own screen and nothing is placed under the hinge. Side by side: TV and controls on the first screen, the channel picker always open on the second. Top and bottom (half-folded): TV on top, picker below. The menu opens as a drawer on the first screen. Folding back returns the picker to how you left it.
+- **Nothing reloads or moves on a fold, rotation or resize:** layouts are CSS only, so the channel keeps playing. The picker (collection, language, country, genre, search, scroll), the details section and the page scroll are also saved for the session, so they come back if the phone reloads the tab.
+- **Dialogs and the keyboard:** dialogs are centred inside the safe area, scroll inside when tall, keep their buttons visible, and move above the on-screen keyboard (measured with `visualViewport`, since iOS doesn't shrink the page for it). Toasts too.
+- **Touch:** on touch screens every control is at least 44 px; text fields use 16 px text so iOS doesn't zoom in; no double-tap zoom delay; the volume slider is hidden (the device's buttons work). Mouse and keyboard work as before; focus outlines, `inert` behind overlays, `aria-live` toasts, reduced motion.
+- **Installable app:** web app manifest with icons (including a maskable one), standalone display, iOS home-screen meta (full screen, translucent status bar the layout keeps clear of), `interactive-widget=resizes-content` so Android shrinks the page for the keyboard.
+- **The iPhone Duo itself** isn't something any browser here can emulate exactly; it was modelled from the owner's description (vertical island on the side, side system UI, a hinge when unfolded). If Safari on the Duo reports its hinge the way Chrome does (screen segments), the two-screen layout applies; if it doesn't, the unfolded Duo gets the normal wide layout, still inside the safe areas.
+
 ## Open items / not verified
-- Not yet tried on a real iPhone, Fold or Apple TV after the redesign (the AirPlay change itself was confirmed by the owner before it).
+- Not yet tried on a real iPhone, iPhone Duo, Fold or Apple TV after the redesign; the device work was tested with emulated safe areas and hinges (the AirPlay change itself was confirmed by the owner before it).
 - Possible later: i.mjh.nz FAST lists (Pluto, Samsung TV Plus) if they can be verified to work in a browser.
