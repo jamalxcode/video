@@ -40,8 +40,8 @@ All user data (playlists, presets, ratings, test results, settings) lives in the
 ## Conventions and gotchas
 
 - With each release bump BOTH:
-  - asset query strings in `index.html` (currently `modern.css?v=4`, `app.js?v=36`, `modern.js?v=10`) for the files that changed, and
-  - `CACHE` in `sw.js` (currently `video-shell-v16`).
+  - asset query strings in `index.html` (currently `modern.css?v=5`, `app.js?v=36`, `modern.js?v=11`) for the files that changed, and
+  - `CACHE` in `sw.js` (currently `video-shell-v17`).
   Otherwise returning visitors keep stale files.
 - If you add a new app file, add it to `SHELL` in `sw.js`.
 - Keep the GoatCounter snippet at the end of `index.html` intact (endpoint `https://salacompany.goatcounter.com/count`, skipped on localhost, path prefixed with `location.host`).

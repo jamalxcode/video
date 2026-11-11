@@ -175,7 +175,11 @@ window.Modern = (() => {
     const holder = $m('mColumns');
     const x = holder.scrollLeft, ys = [...holder.children].map(c => c.scrollTop);
     holder.innerHTML = lists + lCol + ccCol + gCol + chCol;
-    holder.scrollLeft = x;
+    // A redraw in the middle of the slide to the next column (channels arriving, checks finishing)
+    // would otherwise stop it part way, leaving the channels off screen on phones and folds.
+    const goal = holder._goal;
+    holder.scrollLeft = goal && Date.now() < goal.until ? goal.left : x;
+    if (goal && Date.now() < goal.until) holder.scrollTo({ left: goal.left, behavior: 'instant' });
     [...holder.children].forEach((c, i) => { c.scrollTop = ys[i] || 0; });
     fitMergedNames();
     autoTestSoon();
@@ -221,7 +225,9 @@ window.Modern = (() => {
   function scrollColumns(i) {
     const holder = $m('mColumns'), col = holder.children[i];
     if (!col) return;
-    holder.scrollTo({ left: col.offsetLeft - holder.children[0].offsetLeft, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+    const left = Math.min(col.offsetLeft - holder.children[0].offsetLeft, holder.scrollWidth - holder.clientWidth);
+    holder._goal = { left, until: Date.now() + 1500 }; // finished after a redraw, see draw()
+    holder.scrollTo({ left, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
   }
   // Quiet checks for the channel rows on screen, while you scroll (Settings → test quietly).
   let autoTimer = 0;

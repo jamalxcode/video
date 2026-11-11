@@ -366,7 +366,10 @@ body.modern-ui .toast{position:fixed;left:50%;transform:translateX(-50%);max-wid
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body.modern-ui{overscroll-behavior:none}
 #modernApp button,#modernApp a,#modernApp select,dialog button,dialog select{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
-#modernApp .m-center-scroll,#modernApp .m-columns,#modernApp .m-column,#modernApp .m-nav,dialog{overscroll-behavior:contain}
+#modernApp .m-center-scroll,#modernApp .m-columns,#modernApp .m-nav,dialog{overscroll-behavior:contain}
+/* Columns only contain up/down scrolling: a sideways swipe on a column must pass on to the row of columns,
+   or on phones and folds the channels column (names, the ✓ marks) can't be reached. */
+#modernApp .m-column{overscroll-behavior:auto contain}
 /* Everything sits inside the safe area on every side (camera cutouts, a side-mounted island or system bar,
    the home indicator); the background still fills the whole screen. */
 body.modern-ui #modernApp{height:100vh;height:100dvh;padding:var(--sa-t) var(--sa-r) var(--sa-b) var(--sa-l);box-sizing:border-box}
@@ -441,4 +444,14 @@ body.modern-ui #modernApp{min-height:0}
 @media (pointer:coarse){
   #modernApp .m-timer #mSleep,#modernApp .m-station-launch{min-height:44px}
   #modernApp .m-volume{display:none} /* touch devices: the device's own volume buttons */
+}
+
+/* Narrow screens: the picker can't show all five columns, so the channels column fills what the genres column
+   leaves (choosing a country slides to genres + channels), and channel names show in full. */
+@media(max-width:1049px){
+  #modernApp .m-columns{container-type:inline-size}
+  #modernApp .m-column-stations{width:clamp(244px,calc(100cqw - 155px),380px);min-width:0}
+}
+@media(max-width:620px){
+  #modernApp .m-column-stations{width:clamp(228px,calc(100cqw - 145px),380px)}
 }

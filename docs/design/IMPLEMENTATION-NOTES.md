@@ -9,7 +9,7 @@
 | `app.js` | Engine: IndexedDB storage, playlists (several URLs per playlist, mirrors), M3U parsing and merging, languages, stream tester, playback (native HLS on AirPlay browsers, hls.js, mpegts.js, native), TV picture (test card, static, OSD), sleep timer, presets store, share links, backup, keyboard. |
 | `modern.js` | The screen: picker (Collections → Languages → Countries → Genres → Channels), now playing, connection panel, presets, recently watched, menu, Media Session. Sets `S.filtered` so next / previous follow the picker. |
 | `modern.css` | The screen and dialogs (radio design) plus the TV picture's retro styles. |
-| `sw.js` | Offline shell. App files stale-while-revalidate; `lists/` never cached. Bump `CACHE` with each release (now `video-shell-v16`). |
+| `sw.js` | Offline shell. App files stale-while-revalidate; `lists/` never cached. Bump `CACHE` with each release (now `video-shell-v17`). |
 | `manifest.webmanifest`, `icon-192.png`, `icon-512.png`, `icon-maskable-512.png` | Installable app (rendered from `favicon.svg`). |
 | `lists/free-tv.m3u8` | Free-TV copy, refreshed daily by `.github/workflows/free-tv.yml`. |
 | `mirror/mirror.js` | Cloudflare Worker that mirrors iptv-org for blocked networks (deployed separately). |
@@ -22,7 +22,7 @@
 - `Presets` (app.js): 18 saved copies in IndexedDB `kv:presets`; `fill()` into empty slots, `sync()` refreshes their stream links from a loaded playlist; included in backups.
 - Picker sorting: A–Z with `Intl.Collator({numeric: true})` ignoring leading punctuation, computed once per channel set. Countries A–Z by displayed name; genres A–Z; languages A–Z with Unknown last. Countries and genres merge 1–2-channel entries into groups of 6+ (`mergeSmall`); merged counts are recounted so a channel is counted once. Languages are never merged.
 - Language flags: `LANG_HOME` in `modern.js` (ISO 639 code → home country). Duplicate codes merged by `LANG_SAME` in `app.js`.
-- Asset versions in `index.html`: `modern.css?v=4`, `app.js?v=36`, `modern.js?v=10`; bump when the file changes.
+- Asset versions in `index.html`: `modern.css?v=5`, `app.js?v=36`, `modern.js?v=11`; bump when the file changes.
 
 ## Devices (modern.js `layout()`, the "Devices" section at the end of modern.css)
 - Root classes set by `layout()`: `m-rail` (landscape and height ≤ 560 px, `RAIL` query), `m-dual-h` / `m-dual-v` (two `window.viewport.segments`, side by side / stacked). CSS keys off these classes; `--seg-first` and `--seg-hinge` give the first pane's size and the hinge's, measured from the segments relative to the shell (so safe-area padding is accounted for).
@@ -46,6 +46,12 @@
 - Settings dialog on a 390 px tall landscape screen, with and without a 180 px keyboard: inside the safe area and above the keyboard, scrolling inside, Save visible.
 - Earlier suites re-run: playback / backup sources / settings / backup / playlists, picker counts, presets sharing. ESLint `no-undef` clean.
 - Two test-harness traps (not app bugs): Playwright's own viewport and screenshot calls reset an emulated hinge; set the viewport first, then the CDP override, and use CDP `Page.captureScreenshot`.
+
+## Picker sideways scrolling fix (2026-11-11, same as radio.sala.company's)
+- Columns had `overscroll-behavior: contain` on both axes, which also swallowed sideways swipes that started on a column, so on phones and folds the row of columns couldn't be swiped to the channels. Now `overscroll-behavior: auto contain` (only up/down contained).
+- A redraw during the slide to the next column (channels loading, checks finishing) restored the mid-slide position and stopped it. `scrollColumns()` stores the target in `holder._goal` (1.5 s) and `draw()` finishes it.
+- Narrow screens (≤ 1049 px): the channels column fills what the genres column leaves (`container-type: inline-size`, `width: clamp(244px, 100cqw − 155px, 380px)`; 228 px / 145 px under 620 px), so names show in full.
+- Tested with CDP touch swipes at 390, 476 and 700 px: before, a swipe on a column moved the row 0 px and a country tap plus a mid-slide refresh left the channels column partly off screen; after, the swipe moves the row and the channels column ends fully on screen. Device matrix, fold transitions and picker counts re-run.
 
 ## Not verified
 - Real devices (iPhone Safari, iPhone Duo, Samsung Fold, Apple TV via AirPlay) after the redesign. Whether Safari on the iPhone Duo reports its hinge as screen segments is unknown.
