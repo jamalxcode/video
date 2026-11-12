@@ -62,7 +62,7 @@ Playlists, presets, ratings, test results and settings are stored in the browser
 
 - [Design decisions](docs/design/DECISIONS.md): what was decided and why (AirPlay, Free-TV, the radio-style screen, presets only, languages and flags).
 - [Implementation and testing notes](docs/design/IMPLEMENTATION-NOTES.md): how the pieces fit, what was tested, what wasn't.
-- [Conversation record](docs/conversations/2026-11-02_to_2026-11-11.md): the requests behind each change.
+- [Conversation record](docs/conversations/2026-11-02_to_2026-11-12.md): the requests behind each change.
 - The design before the 2026-11-09 redesign is kept on the branch `backup/pre-redesign-2026-11-09`.
 
 ## Code

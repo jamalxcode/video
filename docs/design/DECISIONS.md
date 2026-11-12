@@ -1,9 +1,9 @@
 # video.sala.company: design decisions
 
-**Updated:** 2026-11-11
+**Updated:** 2026-11-12
 **Live:** https://video.sala.company (GitHub Pages, deployed from `main`)
 **Pre-redesign rollback:** branch `backup/pre-redesign-2026-11-09` at `6a6b585` (the wood-cabinet TV and cable guide). Don't overwrite it.
-**Related:** [implementation and testing notes](IMPLEMENTATION-NOTES.md) · [conversation record](../conversations/2026-11-02_to_2026-11-11.md) · the radio this design follows: [jamalxcode/radio](https://github.com/jamalxcode/radio) and its `docs/design/DECISIONS-2026-11-09.md`
+**Related:** [implementation and testing notes](IMPLEMENTATION-NOTES.md) · [conversation record](../conversations/2026-11-02_to_2026-11-12.md) · the radio this design follows: [jamalxcode/radio](https://github.com/jamalxcode/radio) and its `docs/design/DECISIONS-2026-11-09.md`
 
 This file records what the owner decided and why, newest decisions folded in. The code on `main` is the source of truth for what shipped; update this file with each new decision.
 
@@ -64,6 +64,11 @@ The owner set ten requirements: iPhone Duo folded and unfolded plus phones, tabl
 - **Touch:** on touch screens every control is at least 44 px; text fields use 16 px text so iOS doesn't zoom in; no double-tap zoom delay; the volume slider is hidden (the device's buttons work). Mouse and keyboard work as before; focus outlines, `inert` behind overlays, `aria-live` toasts, reduced motion.
 - **Installable app:** web app manifest with icons (including a maskable one), standalone display, iOS home-screen meta (full screen, translucent status bar the layout keeps clear of), `interactive-widget=resizes-content` so Android shrinks the page for the keyboard.
 - **The iPhone Duo itself** isn't something any browser here can emulate exactly; it was modelled from the owner's description (vertical island on the side, side system UI, a hinge when unfolded). If Safari on the Duo reports its hinge the way Chrome does (screen segments), the two-screen layout applies; if it doesn't, the unfolded Duo gets the normal wide layout, still inside the safe areas.
+
+## 10. Channel picker reachable on phones and folds (2026-11-11)
+- On radio the owner found (on a Galaxy Fold) that the station picker couldn't be swiped sideways to the stations, and a refresh during the slide after a tap stopped it short. Video had the same code and was checked: it had both problems.
+- **Decision (same as radio):** the five columns are wider than a phone, so a sideways swipe that starts anywhere on them, including on a column's list, must move the row (columns contain only up/down scrolling). Choosing a collection, language, country or genre slides to the next columns and finishes even if the picker redraws meanwhile. On screens up to 1049 px wide the Channels column fills the space beside Genres (228–380 px), so after choosing a country you see Genres, full channel names and the ✓ / × marks together.
+- Radio's fix was confirmed by the owner on the Fold; video's was verified in the browser at 390, 476 and 700 px, not yet on the Fold.
 
 ## Open items / not verified
 - Not yet tried on a real iPhone, iPhone Duo, Fold or Apple TV after the redesign; the device work was tested with emulated safe areas and hinges (the AirPlay change itself was confirmed by the owner before it).
