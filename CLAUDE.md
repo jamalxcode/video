@@ -4,7 +4,7 @@ This file guides Claude Code when working in this repository.
 
 ## Overview
 
-video.sala.company (live at https://video.sala.company) is a browser IPTV player for M3U/M3U8 playlists, styled as a retro TV next to a radio.sala.company-style navy/brushed-metal UI with a Finder-style channel picker. With no playlist it auto-loads iptv-org combined with Free-TV (about 12,300 channels). It is plain HTML/CSS/vanilla JS with no build step and no package.json; playback uses hls.js and mpegts.js from jsDelivr plus native `<video>`.
+video.sala.company (live at https://video.sala.company) is a browser IPTV player for M3U/M3U8 playlists, styled as a retro TV next to a radio.sala.company-style navy/brushed-metal UI with a Finder-style channel picker. With no playlist it auto-loads iptv-org combined with Free-TV (about 12,400 channels). It is plain HTML/CSS/vanilla JS with no build step and no package.json; playback uses hls.js and mpegts.js from jsDelivr plus native `<video>`.
 
 ## Commands
 

@@ -1,11 +1,19 @@
 # video.sala.company: design decisions
 
-**Updated:** 2026-11-12
+**Updated:** 2026-11-12 (summary added)
 **Live:** https://video.sala.company (GitHub Pages, deployed from `main`)
 **Pre-redesign rollback:** branch `backup/pre-redesign-2026-11-09` at `6a6b585` (the wood-cabinet TV and cable guide). Don't overwrite it.
 **Related:** [implementation and testing notes](IMPLEMENTATION-NOTES.md) · [conversation record](../conversations/2026-11-02_to_2026-11-12.md) · the radio this design follows: [jamalxcode/radio](https://github.com/jamalxcode/radio) and its `docs/design/DECISIONS-2026-11-09.md`
 
 This file records what the owner decided and why, newest decisions folded in. The code on `main` is the source of truth for what shipped; update this file with each new decision.
+
+## The site today, at a glance
+- **Channels:** iptv-org + Free-TV combined by default (about 12,400 channels, duplicates merged into backup sources); your own playlists by URL, file or pasted text. Free-TV loads from this site's copy (§2, §3).
+- **Screen:** radio.sala.company's navy design with the retro TV picture kept (§4). Now playing: picture, channel, Play/Pause, real connection status with Retry, sleep selector, ◀ CH / CH ▶, details (sources, rating, Test, Copy link). 18 presets (no favorites, §5), Recently watched.
+- **Picker:** Collections → Languages → Countries → Genres → Channels, all A–Z (§6, §7). Languages each on their own row with the flag of the country they started in; small countries and genres merged into groups of 6+. Countries are where a channel is registered, not its language. Silver ✓ for channels a test or play showed working. Picking a channel plays it and returns to the TV; sideways swipes move through the columns on phones and folds (§10).
+- **Apple TV:** AirPlay from Safari, the Apple TV fetching the stream itself (§1).
+- **Devices:** safe areas on all four sides, a side rail on landscape phones and narrow outer displays, one pane per screen on folding screens with nothing under the hinge, playback never interrupted by folding or rotating, dialogs above the keyboard, 44 px touch targets, installable (§9).
+- **Data:** everything stays in the browser (IndexedDB); backup export / import and share links for presets and playlists.
 
 ## 1. Watching on Apple TV (2026-11-02)
 - The owner has no Apple developer account and wanted the easiest way to watch on an Apple TV. A native tvOS app was ruled out: a free Apple ID install expires every 7 days, needs a Mac, and tvOS has no web view to wrap the site.
@@ -15,7 +23,7 @@ This file records what the owner decided and why, newest decisions folded in. Th
 
 ## 2. More channels (2026-11-05)
 - The owner asked for more public channel lists from GitHub and elsewhere.
-- **Decision: add Free-TV** ([Free-TV/IPTV](https://github.com/Free-TV/IPTV)), a curated list of channels that are free to watch, combined with iptv-org into the automatic default list ("All channels (iptv-org + Free-TV)", about 12,400 channels). A channel in both becomes one channel with backup sources.
+- **Decision: add Free-TV** ([Free-TV/IPTV](https://github.com/Free-TV/IPTV)), a curated list of channels that are free to watch, combined with iptv-org into the automatic default list ("All channels (iptv-org + Free-TV)", about 12,400 channels at the time). A channel in both becomes one channel with backup sources.
 - A playlist URL can hold several lists separated by spaces; they're fetched together and merged.
 - Free-TV groups by country name; those groups become the channel's country instead of cluttering Genres. YouTube page links (not streams) are skipped.
 - Existing users' iptv-org-only default list is upgraded automatically.
@@ -30,7 +38,7 @@ The owner asked for the radio's new layout and station picker, **keeping the vid
 - **Kept from the TV:** the picture itself: test card when idle, static between channels, the green on-screen channel number, the cable-guide style messages (No signal, Still loading…) with their buttons, scanlines (switchable in Settings).
 - **Taken from the radio:** navy brushed-metal panels; a menu (sidebar on wide screens, ☰ drawer on phones); a **Channels** button (TV icon) with the red Knight Rider scanner light; a Finder-style picker; a connection panel that reports the real player state; one sleep selector with a live countdown and **Sleep Off**; 18 presets (long-press 650 ms or Shift+Enter saves, one highlighted slot); Recently watched.
 - **Picking a channel plays it and closes the picker** (returns to the TV), as on the radio. A large **← Back to TV** button closes it without picking.
-- **Video-specific choices:** ◀ CH / CH ▶ buttons stay (channel changing matters more on a TV than on the radio); a *Channel details, sources and rating* section keeps source choice, ratings, Test and Copy link; volume slider hidden on phones.
+- **Video-specific choices:** ◀ CH / CH ▶ buttons stay (channel changing matters more on a TV than on the radio); a *Channel details, sources and rating* section keeps source choice, ratings, Test and Copy link; volume slider hidden on touch screens (§9).
 - **Removed with the redesign:** the wood cabinet and dial, the amber VCR info panel (source, type and resolution moved to the connection line), the old guide's sort / "working only" filters. Search matches names, languages, countries and genres.
 - The old design is kept on `backup/pre-redesign-2026-11-09`.
 
@@ -51,7 +59,7 @@ The owner asked for the radio's new layout and station picker, **keeping the vid
 - Languages listed under two codes are one language: older bibliographic codes (`dut`/`nld`, `fre`/`fra`, `cze`/`ces`, `arm`/`hye`…) and two slips in iptv-org's data (`jap` on anime channels = Japanese, `far` on an Iranian channel = Persian).
 
 ## 8. Clean-up and review (2026-11-09)
-- The hidden old controls (guide list, filters, cursor navigation, VCR display, dial, sleep knob, playlist menu) and the code behind them were removed (about 410 lines). `style.css` was replaced by `modern.css`.
+- The owner asked for a review for missed bugs, then for the hidden old controls to be cleaned up. The hidden old controls (guide list, filters, cursor navigation, VCR display, dial, sleep knob, playlist menu) and the code behind them were removed (about 410 lines). `style.css` was replaced by `modern.css`.
 - Review fixes: the connection panel updates the instant the player changes state; Recently watched redraws when its order changes; lock-screen / Control Center controls (Media Session: name, logo, play/pause, next/previous).
 
 ## 9. iPhone Duo and every other device (2026-11-11)
@@ -72,4 +80,6 @@ The owner set ten requirements: iPhone Duo folded and unfolded plus phones, tabl
 
 ## Open items / not verified
 - Not yet tried on a real iPhone, iPhone Duo, Fold or Apple TV after the redesign; the device work was tested with emulated safe areas and hinges (the AirPlay change itself was confirmed by the owner before it).
+- Video's picker swipe fix (§10) hasn't been confirmed on the Fold yet (radio's has).
+- Language flag choices the owner may want changed: Urdu → 🇵🇰, Latin → 🇮🇹, Cantonese → 🇨🇳 (§7).
 - Possible later: i.mjh.nz FAST lists (Pluto, Samsung TV Plus) if they can be verified to work in a browser.

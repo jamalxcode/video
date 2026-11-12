@@ -1,6 +1,6 @@
 # video.sala.company: implementation and testing notes
 
-**Updated:** 2026-11-11 · decisions: [DECISIONS.md](DECISIONS.md)
+**Updated:** 2026-11-12 · decisions: [DECISIONS.md](DECISIONS.md)
 
 ## Files
 | File | Role |
@@ -51,7 +51,7 @@
 - Columns had `overscroll-behavior: contain` on both axes, which also swallowed sideways swipes that started on a column, so on phones and folds the row of columns couldn't be swiped to the channels. Now `overscroll-behavior: auto contain` (only up/down contained).
 - A redraw during the slide to the next column (channels loading, checks finishing) restored the mid-slide position and stopped it. `scrollColumns()` stores the target in `holder._goal` (1.5 s) and `draw()` finishes it.
 - Narrow screens (≤ 1049 px): the channels column fills what the genres column leaves (`container-type: inline-size`, `width: clamp(244px, 100cqw − 155px, 380px)`; 228 px / 145 px under 620 px), so names show in full.
-- Tested with CDP touch swipes at 390, 476 and 700 px: before, a swipe on a column moved the row 0 px and a country tap plus a mid-slide refresh left the channels column partly off screen; after, the swipe moves the row and the channels column ends fully on screen. Device matrix, fold transitions and picker counts re-run.
+- Tested with CDP touch swipes (`Input.dispatchTouchEvent` start / moves / end with `hasTouch` + `isMobile`) at 390, 476 and 700 px; in this setup they did scroll (the radio session found synthesized gestures didn't scroll for it and used `page.mouse.wheel(dx, 0)`, which follows the same scroll-chaining rules; either works as a check): before, a swipe on a column moved the row 0 px and a country tap plus a mid-slide refresh left the channels column partly off screen; after, the swipe moves the row and the channels column ends fully on screen. Device matrix, fold transitions and picker counts re-run.
 
 ## Not verified
 - Real devices (iPhone Safari, iPhone Duo, Samsung Fold, Apple TV via AirPlay) after the redesign. Whether Safari on the iPhone Duo reports its hinge as screen segments is unknown.
