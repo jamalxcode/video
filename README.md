@@ -1,103 +1,133 @@
-# video.sala.company
+# 📺 video.sala.company
 
-Live at **https://video.sala.company** · part of [Sala Company](https://go.sala.company), free apps that run in your browser
+**Live at https://video.sala.company** · part of [Sala Company](https://go.sala.company), free apps that run in your browser
 
-A browser-based player for M3U / M3U8 IPTV playlists. It's a static site, so it can be hosted for free on GitHub Pages.
+Remember when a TV was a wooden box with rabbit ears, and changing the channel meant getting off the sofa? This is that feeling, minus the sofa part. Open the page and about **12,400 free TV channels** from around the world load by themselves: news, cooking shows, anime, weather, and the occasional shopping channel in a language you don't speak. No account, no app store, no subscription. It's a web page.
 
-## The screen
+Under the hood it's a player for M3U / M3U8 IPTV playlists, built from plain HTML, CSS and JavaScript with no build step, hosted for free on GitHub Pages.
 
-The layout and channel picker follow [radio.sala.company](https://radio.sala.company) (navy, brushed-metal panels), with the retro TV picture kept: test card when idle, static between channels, the green on-screen channel number and the cable-guide style messages.
+---
 
-- **Now playing:** the TV picture, then the channel with its flag, number, country, genre and language, and a large Play/Pause button. Below it the real connection status ("Connecting…", "Connected · On air · Source 1 of 2 · HLS · 720p", "No signal" with the reason and a Retry button).
-- **Sleep, channel up/down and volume:** one sleep selector (15 minutes to 3 hours, with a live countdown and **Sleep Off**; at zero the sound fades out), ◀ CH / CH ▶ buttons, and a volume slider (not on touch screens, where the device's own buttons work).
-- **Channel details, sources and rating:** pick a channel's source by hand, rate it (Smooth / Buffers / Broken), test it, copy its link for VLC, and see its play and test history.
-- **Presets:** 18 slots with channel logos. Tap to play; long-press (or Shift+Enter) saves the channel that's on. Only the slot you picked is highlighted, even if a channel is saved twice. Presets are saved copies; when a playlist loads they pick up their channel's latest stream links. Presets replace favorites: saved favorites moved once into the empty slots, and favorites in old backups and old share links do the same (any that don't fit are added as a playlist).
-- **Recently watched:** the last channels you actually watched.
-- **Channels** (the TV button, with a sweeping red scanner light): a Finder-style picker with Collections → Languages → Countries → Genres → Channels, all A–Z. Collections holds your playlists, ◷ Recently watched and ＋ Add playlist. Languages come from the playlist or iptv-org's channel data (a channel with several languages is under each; ones with none are under Unknown, last). The country is where the channel is registered, so a Persian channel run from Los Angeles is under United States; pick a language first to find those. Every language has its own row, with the flag of the country it started in (English 🇬🇧, Arabic 🇸🇦, Spanish 🇪🇸); languages with no country of their own (Kurdish, Romani, Tibetan, Uyghur, Serbo-Croatian) have none. Two codes for the same language (Dutch `dut`/`nld`, French `fre`/`fra`…) count as one. Countries and genres with only 1–2 channels are merged into groups of six or more, and a merged row counts each channel once. Search matches channel names, countries, genres and languages. Channels on screen are checked quietly; a silver ✓ marks channels a real test or play showed working. Picking a channel plays it and returns to the TV; on phones the picker slides over the screen, and you swipe sideways (from anywhere on the columns) to move between them; after choosing a country the Channels column fills the space beside Genres. *Test channels* checks everything listed. Next / previous channel follow what the picker lists.
-- **Menu (☰ on phones, a sidebar on wider screens):** Home, Recently watched, Channel browser, Add playlist, Settings.
-- **Settings (⚙):** skip failed channels, retro screen effects, quiet checks, advanced timings; refresh, share or remove the open playlist; share presets; backup export/import (presets included); clear test history; erase everything.
+## The tour
 
-## Features
+### The TV
+The picture is a little time machine. When nothing's on you get the classic **colour-bar test card**. Change channel and you get **static**, then a green **CH 378** in the corner like an old set. When a stream gives up, a cable-company style **NO SIGNAL** box says why, with Next channel, Retry and Copy link for VLC. Scanlines included (switchable in Settings if you're not feeling nostalgic).
 
-- **Ready to watch**: whenever there is no playlist, the full [iptv-org](https://github.com/iptv-org/iptv) list combined with [Free-TV](https://github.com/Free-TV/IPTV) (a hand-picked list of free channels) loads by itself: about 12,400 channels. A channel that's in both lists becomes one channel with backup sources. If you remove it (Settings → Remove this playlist), it isn't added again. People who already had the iptv-org-only list get Free-TV added to it automatically.
-- **Combined playlists**: a playlist URL can hold several lists separated by spaces; they're downloaded together and merged. The Add dialog has quick picks for iptv-org + Free-TV, iptv-org alone, Free-TV alone, or one iptv-org country. Free-TV loads from this site's own copy (`lists/free-tv.m3u8`, refreshed daily by the *Refresh Free-TV copy* GitHub Action), so it works wherever the player loads, even where raw.githubusercontent.com is blocked; jsDelivr can't serve Free-TV because its repo is over jsDelivr's 50 MB limit. Other GitHub-hosted lists fall back to jsDelivr and githack copies.
-- **Works on networks that block iptv-org**: every iptv-org download (the channel list, the country lists, the language data) is fetched from seven sources in a race: iptv-org.github.io, this site's own Cloudflare Worker (`mirror/mirror.js` at video-mirror.jamal-akuna-matata.workers.dev, which fetches from iptv-org and keeps a copy for six hours), raw.githubusercontent.com, jsDelivr (three hosts) and githack. Each waits 3 seconds for the previous one before starting, the first good answer wins and the rest are cancelled. If all seven fail, the player retries on its own (after 5 s, 15 s, 30 s, then every minute) and as soon as the network comes back.
-- **Load playlists** from a URL, an uploaded file, or pasted text, or quick-add iptv-org, Free-TV or any iptv-org country list. You can keep several playlists and switch between them.
-- **Plays** HLS (`.m3u8`) with hls.js, MPEG-TS/FLV with mpegts.js, and MP4/WebM with the browser's own player.
-- **AirPlay to Apple TV**: on iPhone, iPad and Mac Safari, HLS channels play in Safari's own player, so the AirPlay button in the player sends the channel straight to an Apple TV (the Apple TV fetches the stream itself, and you can lock your phone). Raw TS/FLV channels can't be AirPlayed this way; use Screen Mirroring for those.
-- **Status before you click.** Every channel in the picker shows a mark on its name line:
-  - silver **✓ Verified working**: a test or a real play showed it streams well (or you rated it Smooth)
-  - **! Slow**: slow to respond, video downloads close to real-time speed, or it buffered a lot when you watched it
-  - **×** Unavailable or Blocked: offline or failed when you tried it, or the server doesn't allow web players (CORS or HTTP-only)
-  - **?** not checked yet, **◌** being checked now
-- **Testing**: channels on screen in the picker are tested automatically (you can turn this off). *Test channels* checks everything the picker lists. Tests are light: each reads only a small sample of video, runs at most 2 at a time per server, and skips servers already known to block browsers. Results stay valid for 6 hours.
-- **Always current**: playlists added from a URL are quietly re-downloaded once a day.
-- **Learns from watching**: start time, failures and buffering are recorded every time you play a channel.
-- **Your own ratings**: 👍 Smooth / ⚠ Buffers / ✖ Broken. Your rating always beats test results.
-- **Presets** work across all your playlists.
-- **Country and language**: every channel shows its country flag before its name and its language code(s) beside it (e.g. ARA·FRA). For iptv-org channels the country comes from the channel id and the language from iptv-org's channel data (refreshed every few days); other playlists can provide `tvg-country` and `tvg-language`. Flags use a small flags-only font so they also show on Windows.
-- **Playlist warnings**: sources iptv-org marks as geo-blocked or not on air 24/7 are tried last.
-- **Recently watched**: the last 40 channels you actually watched, from any playlist.
-- **Remembers volume** and mute between channels and visits.
-- **Auto-skip** (in Settings): jumps to the next working channel when one fails or times out.
-- **Sleep timer**: the sleep selector (or `S`, which adds 30 minutes at a time up to 3 hours, then off). At the end the sound fades out over 10 seconds and the channel stops, with a button to resume.
-- **Every device**: phones, tablets, foldables (including the iPhone Duo, folded and unfolded) and desktops. The layout keeps clear of notches, Dynamic Islands and side system bars on any edge; landscape phones and narrow outer displays get a vertical side rail; on a folding screen the TV and the channel picker each get their own screen and nothing sits under the hinge. Folding, rotating or resizing never interrupts the channel, and your place in the picker survives a reload. Installable as an app (Add to Home Screen / Install).
-- **Lock screen and AirPlay remote**: the channel's name and logo show in Control Center and on the lock screen, with play/pause and next/previous channel (where the browser supports it).
-- **Keyboard / TV remote**: ↑↓ or ←→ previous/next channel, type a channel number to jump, `S` sleep timer, Space pause, Esc closes the menu or picker.
-- **Retro picture**: scanlines and static between channels can be switched off in Settings.
+Around it is a modern navy, brushed-metal control panel, borrowed from our sister site [radio.sala.company](https://radio.sala.company), so the two feel like a matching hi-fi set.
 
-## Share links
+### Now playing
+- The channel's flag, name, number, country, genre and language, plus a big **Play / Pause** button.
+- A **connection panel** that tells the truth: "Connecting…", "Trying backup source 2 of 3…", "Connected · On air · Source 1 of 2 · HLS · 720p", or "No signal" with the actual reason and a Retry button.
+- **Sleep timer**: one menu from 15 minutes to 3 hours, with a live countdown. At zero the sound fades out over 10 seconds, like a polite parent turning off the TV.
+- **◀ CH / CH ▶** for good old channel surfing.
+- **Channel details**: pick a source by hand, rate it (👍 Smooth / ⚠ Buffers / ✖ Broken), test it, copy its link, and see how it's behaved for you before.
 
-Settings → **Share presets** / **Share this playlist** makes a link (after the `#`, so nothing is sent to any server) that carries your preset channels, or a playlist, to another phone or person; opening it offers to add them (presets go into empty preset slots). Playlists from a URL share the URL; pasted or uploaded ones are carried in the link when they fit.
+### 18 presets
+Like the buttons on a car radio. Tap to watch; long-press (or Shift+Enter) to save whatever's on. They work across all your playlists, they keep their stream links fresh when a playlist reloads, and only the button you pressed lights up, even if you saved the same channel twice. (Favorites retired in their favour; any you had moved into the empty slots.)
 
-## Works offline
+### The channel picker
+Hit the **Channels** button, the one with the red light sweeping back and forth like a certain talking car. Out slides a Finder-style browser:
 
-The app's own files are kept in the browser by a small service worker (`sw.js`), so the site opens instantly and still opens with no network, showing your playlists and presets (streams need network). The page itself is fetched fresh when the network answers within 4 seconds, so updates arrive normally.
+**Collections → Languages → Countries → Genres → Channels**
 
-## Your data stays in your browser
+- **Languages** each get their own row and the flag of the country the language started in: 🇬🇧 English, 🇸🇦 Arabic, 🇪🇸 Spanish, 🇮🇷 Persian. (Kurdish, Romani, Tibetan, Uyghur and Serbo-Croatian have no single home country, so no flag.)
+- **Countries** are where a channel is registered, not what it speaks. That's why Korean-language MBC America and Persian High Vision TV live under 🇺🇸 United States (both broadcast from Los Angeles). Pick a language first to find them.
+- Tiny countries and genres (1–2 channels) are bundled into groups of six or more, so the lists stay short.
+- Everything is A–Z, numbers sorted like a human would (2 before 10).
+- Search matches names, languages, countries and genres.
+- On a phone, swipe sideways from anywhere on the columns. After you choose a country, the Channels column stretches to fill the screen so names show in full.
 
-Playlists, presets, ratings, test results and settings are stored in the browser's IndexedDB. Nothing is uploaded anywhere, so every person and every browser has its own separate list. To move your data to another device, use **⚙ → Export backup**, then **Import backup** on the other device.
+Every channel wears a little badge on its name line:
 
-## Design notes
+| Badge | Meaning |
+|---|---|
+| silver **✓** | Verified working: a test or a real play showed it streams well (or you rated it Smooth) |
+| **! Slow** | Slow to start, or it buffered a lot when you watched |
+| **×** | Offline, failed, or the server doesn't allow web players |
+| **?** | Not checked yet |
+| **◌** | Being checked right now |
 
-- [Design decisions](docs/design/DECISIONS.md): what was decided and why (AirPlay, Free-TV, the radio-style screen, presets only, languages and flags, every device including the iPhone Duo and folds, the picker on phones), with a summary of how the site works today.
-- [Implementation and testing notes](docs/design/IMPLEMENTATION-NOTES.md): how the pieces fit, what was tested, what wasn't.
-- [Conversation record](docs/conversations/2026-11-02_to_2026-11-12.md): the requests behind each change.
-- The design before the 2026-11-09 redesign is kept on the branch `backup/pre-redesign-2026-11-09`.
+The picker quietly checks the channels on screen as you scroll. Each check reads only a tiny sample of video, never more than 2 at a time per server, and results stay fresh for 6 hours.
 
-## Code
+---
 
-Plain HTML, CSS and JS, with no build step.
+## Fun things it does
+
+- **Sends TV to your Apple TV.** On an iPhone, iPad or Mac, tap the AirPlay button in the player. Safari hands the stream to the Apple TV, which fetches it itself, so you can lock your phone and carry on. (No developer account, no app: just AirPlay.)
+- **Works on every screen we could think of**, including the iPhone Duo, folded and unfolded. On a phone in landscape, or a narrow outer screen, the menu becomes a vertical toolbar down the side. On a folding screen the TV gets one half and the channel picker gets the other, with nothing hiding under the hinge. Notches, Dynamic Islands and side-mounted system bars are kept clear on every edge.
+- **Never drops the channel when you fold, rotate or resize.** The layout reshuffles around the video without stopping it, and your place in the picker survives a page reload.
+- **Has backup plans for its backup plans.** When the same channel appears in two lists, it becomes one channel with backup sources. If one source fails, the next takes over by itself.
+- **Gets past networks that block things.** The channel list is fetched from seven places in a staggered race: iptv-org.github.io, our own Cloudflare Worker, raw.githubusercontent.com, three jsDelivr hosts and githack. The first good answer wins. If they all fail, it keeps retrying and jumps back in the moment your connection returns. Free-TV loads from a copy on this very site, refreshed daily by a GitHub Action.
+- **Learns from watching.** Start times, failures and buffering are remembered, so the sources that work for *you* are tried first next time. Your own ratings always win over automated tests.
+- **Knows a remote when it sees one.** Arrow keys change channel, typing a number jumps to it (like punching in 4078), Space pauses, S sets the sleep timer, Esc closes the menu or picker. Lock-screen and Control Center controls work too, with the channel's name and logo.
+- **Installs like an app.** Add to Home Screen on iPhone or Install in Chrome and it opens full screen with its own little TV icon.
+- **Works offline-ish.** The app itself opens with no network, showing your playlists and presets (the channels themselves still need the internet, sadly).
+
+---
+
+## Where the channels come from
+
+- **[iptv-org](https://github.com/iptv-org/iptv)**: the big public list of freely available channels worldwide.
+- **[Free-TV](https://github.com/Free-TV/IPTV)**: a hand-picked list of channels that are free to watch, adding about 1,400 more (lots of Italy, Greece, Hungary and Pluto TV).
+- **Your own:** paste a playlist URL (several, separated by spaces, are merged into one), upload a file, or paste the text. `?m3u=<playlist-url>` on the page address adds one from a link (it asks first).
+
+Playlists from a URL refresh themselves once a day. Only use playlists you're allowed to watch.
+
+## Share it
+
+Settings → **Share presets** or **Share this playlist** makes a link that carries your channels to another phone or person. Everything rides after the `#` in the link, so nothing passes through any server. Opening it offers to add them (presets drop into empty slots).
+
+## Your data stays yours
+
+Playlists, presets, ratings, test results and settings live in your browser's IndexedDB. Nothing is uploaded, there are no accounts, and every browser has its own private setup. Moving to a new device? **⚙ → Export backup**, then **Import backup** on the other one.
+
+## Honest limits
+
+These apply to any player that runs in a web page, not just this one:
+
+- **Plain `http://` streams**: browsers block them on secure (HTTPS) pages. The player tries the `https://` version first; if the server doesn't have one, the channel is marked Blocked.
+- **CORS**: some servers only talk to apps like VLC and refuse web pages. They're marked Blocked; use **Copy link** and open them in VLC.
+- **Special headers**: a few playlists need a custom User-Agent or Referer, which browsers don't let web pages send.
+- **AirPlay**: works for HLS channels; raw TS / FLV ones need Screen Mirroring instead.
+- **Test results are a snapshot**: a channel that's fine at noon can be swamped at prime time, which is why the player also remembers how channels behaved when you actually watched.
+
+---
+
+## For the curious (and the tinkerers)
+
+### What's in the box
 
 | File | What's in it |
 |---|---|
-| `app.js` | Storage, playlists, parsing, the stream tester, playback (hls.js / mpegts.js / native), the TV picture (test card, static, on-screen display), sleep timer, presets, share links, backup, keyboard |
-| `modern.js` | The screen: now playing, presets, recently watched, the channel picker, menu |
-| `modern.css` | The screen and its dialogs, and the TV picture's retro styles |
+| `index.html` | The screen and its dialogs |
+| `app.js` | The engine: storage, playlists, parsing, the stream tester, playback (hls.js / mpegts.js / native, with Safari's own player for AirPlay), the TV picture, sleep timer, presets, share links, backup, keyboard |
+| `modern.js` | The screen's brain: now playing, presets, recently watched, the channel picker, menu, and the layouts for rails and folds |
+| `modern.css` | The look, plus the retro TV effects |
 | `sw.js` | Offline shell |
 | `manifest.webmanifest`, `icon-*.png` | Installable app |
-| `lists/free-tv.m3u8` | This site's copy of the Free-TV playlist, refreshed daily by `.github/workflows/free-tv.yml` |
-| `mirror/mirror.js` | Cloudflare Worker that mirrors iptv-org for blocked networks (deployed separately to Cloudflare) |
+| `lists/free-tv.m3u8` | This site's copy of Free-TV, refreshed daily by `.github/workflows/free-tv.yml` |
+| `mirror/mirror.js` | The Cloudflare Worker that mirrors iptv-org for blocked networks (deployed separately, at video-mirror.jamal-akuna-matata.workers.dev) |
 | `docs/` | Design decisions, implementation and testing notes, conversation record |
-| `CLAUDE.md` | Guidance for Claude Code working in this repo |
+| `CLAUDE.md` | Notes for Claude Code when it works on this repo |
 
+No frameworks, no bundler, no `package.json`. To run it locally, serve the folder:
 
-## Put it on GitHub Pages
+```bash
+python3 -m http.server 8000
+```
 
-1. Create a new repository on GitHub, for example `m3u-player`.
+### How it got here
+This site was shaped in conversation, one request at a time. If you like a good backstory:
+
+- **[Design decisions](docs/design/DECISIONS.md)**: what was decided and why, from "can I watch this on my Apple TV?" to language flags and folding phones, with a one-screen summary of how it all works today.
+- **[Implementation and testing notes](docs/design/IMPLEMENTATION-NOTES.md)**: how the pieces fit, how notches and hinges were emulated for testing, and what still needs a real device.
+- **[Conversation record](docs/conversations/2026-11-02_to_2026-11-12.md)**: the requests behind each change, in order.
+- Miss the wood-panel TV? The design before the 2026-11-09 redesign lives on the branch `backup/pre-redesign-2026-11-09`.
+
+### Host your own copy
+1. Create a repository on GitHub, for example `m3u-player`.
 2. Upload `index.html`, `modern.css`, `app.js`, `modern.js`, `sw.js`, `manifest.webmanifest`, the icons, the `lists/` folder and `.nojekyll`. `sample.m3u` is optional.
-3. In the repository, go to **Settings → Pages**. Under **Source**, choose **Deploy from a branch**, pick `main` and `/ (root)`, and save.
-4. After a minute the site is live at `https://<your-username>.github.io/m3u-player/`.
+3. In **Settings → Pages**, choose **Deploy from a branch**, pick `main` and `/ (root)`, and save.
+4. A minute later it's live at `https://<your-username>.github.io/m3u-player/`.
 
-Tip: `https://<you>.github.io/m3u-player/?m3u=<playlist-url>` opens the player and adds that playlist automatically.
-
-## Known browser limits
-
-These apply to every web-based player, not only this one:
-
-- **Plain `http://` streams**: GitHub Pages is HTTPS, and browsers block HTTP video on HTTPS pages. The player tries the `https://` version of the link automatically. If the server doesn't support HTTPS, the channel is marked *Blocked*.
-- **CORS**: some servers only allow apps like VLC and refuse web pages. These are marked *Blocked*. Use **Copy link** to open them in VLC instead.
-- **Custom headers**: playlists that need a special User-Agent or Referer (`#EXTVLCOPT`, `|User-Agent=`) can't be honored, because browsers don't let pages set those headers.
-- Test results are a snapshot. A channel that's fine now can be overloaded at peak time, so the player also remembers how each channel behaved when you actually watched it.
-
-Only use playlists you're allowed to watch.
+Now grab the remote. 📡
